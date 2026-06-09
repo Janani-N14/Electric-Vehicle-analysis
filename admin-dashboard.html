@@ -1,0 +1,1919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard · EV Analysis System</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --bg:#020b18;--blue:#00d4ff;--green:#00ff88;--orange:#ffaa00;--red:#ff4d6d;--purple:#b57aff;
+      --blue-dim:rgba(0,212,255,.12);--green-dim:rgba(0,255,136,.12);
+      --glass:rgba(4,15,34,.7);--border:rgba(0,212,255,.2);
+      --text:#e8f4ff;--muted:#7a9bbf;
+    }
+    html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);}
+    #bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
+    body{animation:fadeIn .55s ease both;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+    .shell{position:relative;z-index:1;display:flex;min-height:100vh;}
+
+    /* SIDEBAR */
+    .sidebar{width:230px;flex-shrink:0;background:var(--glass);border-right:1px solid var(--border);
+      backdrop-filter:blur(24px);display:flex;flex-direction:column;padding:1.4rem 1rem;
+      position:sticky;top:0;height:100vh;overflow-y:auto;transition:transform .3s;}
+    .logo{display:flex;align-items:center;gap:.6rem;margin-bottom:2rem;cursor:pointer;}
+    .logo-text{font-size:.9rem;font-weight:700;
+      background:linear-gradient(90deg,var(--blue),var(--green));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .nav-section{font-size:.62rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:1.1rem 0 .4rem .3rem;}
+    .nav-item{display:flex;align-items:center;gap:.7rem;padding:.6rem .75rem;border-radius:.6rem;
+      font-size:.84rem;color:var(--muted);cursor:pointer;transition:background .2s,color .2s;
+      text-decoration:none;margin-bottom:.15rem;border:none;background:none;width:100%;font-family:inherit;}
+    .nav-item:hover{background:rgba(0,255,136,.1);color:var(--green);}
+    .nav-item.active{background:rgba(0,255,136,.1);color:var(--green);}
+    .nav-item .ni{font-size:1rem;width:1.2rem;text-align:center;}
+    .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:.58rem;
+      padding:.1rem .4rem;border-radius:2rem;font-weight:700;}
+    .sidebar-footer{margin-top:auto;padding-top:1rem;border-top:1px solid var(--border);}
+    .user-chip{display:flex;align-items:center;gap:.7rem;}
+    .avatar{width:2.2rem;height:2.2rem;border-radius:50%;
+      background:linear-gradient(135deg,var(--green),#00c96a);
+      display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
+    .user-info .uname{font-size:.82rem;font-weight:600;}
+    .user-info .urole{font-size:.7rem;color:var(--muted);}
+    .logout-btn{margin-top:.8rem;width:100%;padding:.55rem;background:rgba(255,77,109,.08);
+      border:1px solid rgba(255,77,109,.3);border-radius:.5rem;color:var(--red);
+      font-size:.78rem;cursor:pointer;font-family:inherit;transition:background .2s,box-shadow .2s;}
+    .logout-btn:hover{background:rgba(255,77,109,.18);box-shadow:0 0 10px rgba(255,77,109,.25);}
+
+    /* HAMBURGER */
+    .hamburger{display:none;position:fixed;top:1rem;left:1rem;z-index:100;
+      background:var(--glass);border:1px solid var(--border);border-radius:.5rem;
+      padding:.45rem .55rem;cursor:pointer;backdrop-filter:blur(12px);font-size:1.1rem;}
+    .sidebar-overlay{display:none;position:fixed;inset:0;z-index:49;background:rgba(0,0,0,.5);}
+
+    /* MAIN */
+    .main{flex:1;padding:1.5rem;overflow-x:hidden;min-width:0;}
+    .section{display:none;}
+    .section.active{display:block;animation:fadeIn .4s ease both;}
+
+    /* TOPBAR */
+    .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.6rem;flex-wrap:wrap;gap:.8rem;}
+    .topbar h2{font-size:1.25rem;font-weight:700;}
+    .topbar h2 span{color:var(--green);}
+    .topbar-right{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;}
+    .badge-pill{background:var(--blue-dim);border:1px solid var(--border);
+      border-radius:2rem;padding:.28rem .85rem;font-size:.72rem;color:var(--blue);}
+    .badge-pill.green{background:var(--green-dim);border-color:rgba(0,255,136,.3);color:var(--green);}
+    .badge-pill.red{background:rgba(255,77,109,.12);border-color:rgba(255,77,109,.3);color:var(--red);}
+
+    /* GRIDS */
+    .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.4rem;}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.4rem;}
+    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.4rem;}
+
+    /* CARD */
+    .card{background:var(--glass);border:1px solid var(--border);border-radius:1rem;
+      backdrop-filter:blur(16px);padding:1.2rem;transition:border-color .2s,box-shadow .2s;}
+    .card:hover{border-color:rgba(0,212,255,.3);box-shadow:0 0 16px rgba(0,212,255,.06);}
+    .card-title{font-size:.7rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:.8rem;}
+    .card-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;}
+    .card-title-row .card-title{margin-bottom:0;}
+    .pill-small{font-size:.65rem;padding:.2rem .6rem;border-radius:2rem;
+      background:var(--green-dim);border:1px solid rgba(0,255,136,.25);color:var(--green);}
+    .pill-small.red{background:rgba(255,77,109,.12);border-color:rgba(255,77,109,.3);color:var(--red);}
+
+    /* STAT CARDS */
+    .stat-card{cursor:pointer;}
+    .stat-icon{font-size:1.5rem;margin-bottom:.3rem;}
+    .stat-value{font-size:1.55rem;font-weight:800;line-height:1.1;}
+    .stat-value.blue{color:var(--blue);}.stat-value.green{color:var(--green);}
+    .stat-value.orange{color:var(--orange);}.stat-value.red{color:var(--red);}
+    .stat-label{font-size:.76rem;color:var(--muted);margin-top:.2rem;}
+    .stat-delta{font-size:.68rem;color:var(--green);margin-top:.15rem;}
+    .stat-delta.red{color:var(--red);}
+
+    /* TABLE */
+    .table-wrap{overflow-x:auto;}
+    .table-wrap::-webkit-scrollbar{height:4px;}
+    .table-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+    table{width:100%;border-collapse:collapse;font-size:.8rem;}
+    th{padding:.5rem .8rem;text-align:left;color:var(--muted);font-size:.67rem;
+      letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--border);white-space:nowrap;}
+    td{padding:.6rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);vertical-align:middle;}
+    tr:last-child td{border-bottom:none;}
+    tr:hover td{background:rgba(0,212,255,.04);}
+    .td-id{color:var(--blue);font-weight:700;font-family:monospace;}
+    .status-badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;
+      padding:.2rem .6rem;border-radius:2rem;font-weight:600;white-space:nowrap;}
+    .status-badge.active{background:rgba(0,255,136,.12);color:var(--green);}
+    .status-badge.idle{background:rgba(255,170,0,.12);color:var(--orange);}
+    .status-badge.charging{background:rgba(0,212,255,.12);color:var(--blue);}
+    .status-badge.offline{background:rgba(255,77,109,.12);color:var(--red);}
+    .dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;}
+
+    /* ACTION BTNS */
+    .action-btn{background:none;border:1px solid var(--border);border-radius:.4rem;
+      padding:.28rem .6rem;font-size:.72rem;color:var(--muted);cursor:pointer;
+      transition:border-color .2s,color .2s,box-shadow .2s;font-family:inherit;}
+    .action-btn:hover{border-color:var(--blue);color:var(--blue);box-shadow:0 0 8px rgba(0,212,255,.15);}
+    .action-btn.green{border-color:rgba(0,255,136,.4);color:var(--green);}
+    .action-btn.green:hover{border-color:var(--green);box-shadow:0 0 8px rgba(0,255,136,.2);}
+    .action-btn.red{border-color:rgba(255,77,109,.4);color:var(--red);}
+    .action-btn.red:hover{border-color:var(--red);box-shadow:0 0 8px rgba(255,77,109,.2);}
+
+    /* BAR CHART */
+    .bar-chart{display:flex;align-items:flex-end;gap:8px;height:120px;}
+    .bc-col{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;cursor:pointer;padding:0 4px}
+    .bc-bar{width:100%;border-radius:6px 6px 0 0;min-height:6px;background:linear-gradient(to top,var(--blue),rgba(0,212,255,.25));
+      transition:height .7s cubic-bezier(.2,.9,.2,1),background .25s,filter .2s;transform-origin:bottom}
+    .bc-bar:hover{filter:brightness(1.5);}
+    .bc-bar.green{background:linear-gradient(to top,var(--green),rgba(0,255,136,.3));}
+    .bc-bar.orange{background:linear-gradient(to top,var(--orange),rgba(255,170,0,.3));}
+    .bc-label{font-size:.6rem;color:var(--muted);}
+
+    /* CHARGING CINEMATIC (admin) */
+    #cinema-overlay-admin{position:fixed;inset:0;z-index:1200;display:none;align-items:center;justify-content:center;background:radial-gradient(ellipse at center, rgba(0,0,0,.4), rgba(0,0,0,.85));}
+    #cinema-overlay-admin.open{display:flex}
+    .cinema-stage-admin{position:relative;width:88%;max-width:1200px;height:82%;background:linear-gradient(180deg,#00121a 0%, #021822 60%);border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden;border:1px solid rgba(255,255,255,.03);}
+    #cinema-canvas-admin{position:absolute;inset:0;z-index:1}
+    .cinema-battery-admin{position:absolute;right:7%;top:9%;width:300px;height:560px;z-index:2;display:flex;align-items:flex-end;justify-content:center}
+    .cinema-battery-admin svg{width:100%;height:100%}
+    .cinema-close-admin{position:absolute;top:12px;right:12px;z-index:30;padding:.5rem .6rem;border-radius:.5rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.04);cursor:pointer;color:var(--text)}
+    .cinema-hud-admin{position:absolute;left:6%;bottom:8%;z-index:3;color:var(--muted);font-size:.95rem}
+    .cinema-hud-admin .val{font-size:1.6rem;color:var(--green);font-weight:800}
+  
+  /* ── CHARGING CINEMATIC FUNCTIONS (admin) ── */
+  let _cinemaRAFAdmin = null, _cinemaParticlesAdmin = [], _cinemaCanvasAdmin=null, _cinemaCtxAdmin=null;
+  function openChargingCinematicAdmin(){
+    document.getElementById('cinema-overlay-admin').classList.add('open');
+    _cinemaCanvasAdmin = document.getElementById('cinema-canvas-admin');
+    const stage = document.querySelector('.cinema-stage-admin');
+    _cinemaCanvasAdmin.width = stage.clientWidth;
+    _cinemaCanvasAdmin.height = stage.clientHeight;
+    _cinemaCtxAdmin = _cinemaCanvasAdmin.getContext('2d');
+    _cinemaParticlesAdmin = [];
+    animateChargingCinematicAdmin();
+  }
+
+  function closeChargingCinematicAdmin(){
+    document.getElementById('cinema-overlay-admin').classList.remove('open');
+    if(_cinemaRAFAdmin) cancelAnimationFrame(_cinemaRAFAdmin);
+    _cinemaRAFAdmin=null; _cinemaParticlesAdmin=[];
+  }
+
+  function spawnParticleAdmin(stageW, stageH){
+    const x = Math.random()*stageW*0.6 + stageW*0.2;
+    const y = stageH - 20;
+    const vx = (Math.random()-0.5)*1.2;
+    const vy = - (2 + Math.random()*3);
+    const s = 2 + Math.random()*3;
+    const c = `rgba(0,255,204,${0.6+Math.random()*.4})`;
+    _cinemaParticlesAdmin.push({x,y,vx,vy,s,c,life:80+Math.random()*80});
+  }
+
+  function animateChargingCinematicAdmin(){
+    const stage = document.querySelector('.cinema-stage-admin');
+    const w = _cinemaCanvasAdmin.width = stage.clientWidth;
+    const h = _cinemaCanvasAdmin.height = stage.clientHeight;
+    _cinemaCtxAdmin.clearRect(0,0,w,h);
+    if(Math.random()<0.6) spawnParticleAdmin(w,h);
+    for(let i=_cinemaParticlesAdmin.length-1;i>=0;i--){
+      const p=_cinemaParticlesAdmin[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.06; p.life--;
+      _cinemaCtxAdmin.beginPath(); _cinemaCtxAdmin.fillStyle=p.c; _cinemaCtxAdmin.globalCompositeOperation='lighter';
+      _cinemaCtxAdmin.arc(p.x,p.y,p.s,0,Math.PI*2); _cinemaCtxAdmin.fill(); _cinemaCtxAdmin.globalCompositeOperation='source-over';
+      if(p.life<=0||p.y<30) _cinemaParticlesAdmin.splice(i,1);
+    }
+    // animate mask based on global admin charge stat (mock from chart)
+    const pct = 0.78; // placeholder; adapt to real value if available
+    const maskRect = document.getElementById('maskRectAdmin');
+    if(maskRect){
+      const fillH = 20 + pct*200;
+      const y = 240 - fillH;
+      maskRect.setAttribute('y', y);
+      maskRect.setAttribute('height', fillH);
+    }
+    const elv = document.getElementById('cinema-batt-val-admin'); if(elv) elv.textContent = Math.round(pct*100)+'%';
+    _cinemaRAFAdmin = requestAnimationFrame(animateChargingCinematicAdmin);
+  }
+
+    /* CHARGING CINEMATIC (admin) */
+    #cinema-overlay-admin{position:fixed;inset:0;z-index:1200;display:none;align-items:center;justify-content:center;background:radial-gradient(ellipse at center, rgba(0,0,0,.4), rgba(0,0,0,.85));}
+    #cinema-overlay-admin.open{display:flex}
+    .cinema-stage-admin{position:relative;width:88%;max-width:1200px;height:82%;background:linear-gradient(180deg,#00121a 0%, #021822 60%);border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden;border:1px solid rgba(255,255,255,.03);}
+    #cinema-canvas-admin{position:absolute;inset:0;z-index:1}
+    .cinema-battery-admin{position:absolute;right:7%;top:9%;width:300px;height:560px;z-index:2;display:flex;align-items:flex-end;justify-content:center}
+    .cinema-battery-admin svg{width:100%;height:100%}
+    .cinema-close-admin{position:absolute;top:12px;right:12px;z-index:30;padding:.5rem .6rem;border-radius:.5rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.04);cursor:pointer;color:var(--text)}
+    .cinema-hud-admin{position:absolute;left:6%;bottom:8%;z-index:3;color:var(--muted);font-size:.95rem}
+    .cinema-hud-admin .val{font-size:1.6rem;color:var(--green);font-weight:800}
+
+    /* LINE CHART SVG */
+    .chart-svg{width:100%;overflow:visible;}
+
+    /* ALERTS */
+    .alerts-list{display:flex;flex-direction:column;gap:.6rem;max-height:260px;overflow-y:auto;}
+    .alert-item{display:flex;align-items:flex-start;gap:.7rem;
+      border-radius:.65rem;padding:.6rem .8rem;position:relative;transition:opacity .3s;}
+    .alert-item.crit{background:rgba(255,77,109,.05);border:1px solid rgba(255,77,109,.2);}
+    .alert-item.warn{background:rgba(255,170,0,.05);border:1px solid rgba(255,170,0,.22);}
+    .alert-item.info{background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.18);}
+    .alert-icon{font-size:1.05rem;flex-shrink:0;margin-top:1px;}
+    .alert-title{font-size:.8rem;font-weight:600;}
+    .alert-sub{font-size:.7rem;color:var(--muted);margin-top:.1rem;}
+    .alert-time{font-size:.67rem;color:var(--muted);margin-left:auto;flex-shrink:0;white-space:nowrap;}
+    .alert-dismiss{background:none;border:none;cursor:pointer;color:var(--muted);font-size:.8rem;
+      margin-left:.4rem;padding:0;transition:color .2s;}
+    .alert-dismiss:hover{color:var(--red);}
+
+    /* STATION CARDS */
+    .station-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.7rem;}
+    .st-card{background:rgba(0,212,255,.04);border:1px solid var(--border);
+      border-radius:.7rem;padding:.75rem .85rem;cursor:pointer;transition:border-color .2s,transform .15s;}
+    .st-card:hover{border-color:var(--blue);transform:translateY(-2px);}
+    .st-name{font-size:.82rem;font-weight:600;margin-bottom:.25rem;}
+    .st-meta{font-size:.7rem;color:var(--muted);margin-bottom:.5rem;}
+    .st-bar-outer{background:rgba(255,255,255,.06);border-radius:2rem;height:.4rem;margin-bottom:.35rem;}
+    .st-bar-inner{height:100%;border-radius:2rem;transition:width .8s ease;
+      background:linear-gradient(90deg,var(--blue),var(--green));}
+    .st-footer{display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted);}
+
+    /* REPORT TABS */
+    .report-tabs{display:flex;gap:.4rem;margin-bottom:1rem;}
+    .rtab{padding:.3rem .85rem;border-radius:2rem;font-size:.73rem;cursor:pointer;
+      border:1px solid var(--border);color:var(--muted);transition:all .2s;background:none;font-family:inherit;}
+    .rtab.active,.rtab:hover{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+    .report-row{display:flex;align-items:center;justify-content:space-between;
+      padding:.5rem 0;border-bottom:1px solid rgba(0,212,255,.07);font-size:.82rem;}
+    .report-row:last-child{border-bottom:none;}
+    .rval{font-weight:700;color:var(--blue);}
+    .rdelta{font-size:.7rem;color:var(--green);}
+    .rdelta.neg{color:var(--red);}
+
+    /* DONUT */
+    .donut-wrap{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;}
+    .donut-legend{display:flex;flex-direction:column;gap:.45rem;}
+    .dl-row{display:flex;align-items:center;gap:.5rem;font-size:.78rem;cursor:pointer;}
+    .dl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+
+    /* ADD DRIVER FORM */
+    .form-group{margin-bottom:1rem;}
+    .form-label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.4rem;display:block;}
+    .form-input{width:100%;background:rgba(0,212,255,.04);border:1.5px solid rgba(0,212,255,.2);
+      border-radius:.6rem;padding:.6rem .85rem;color:var(--text);font-size:.87rem;outline:none;
+      font-family:inherit;transition:border-color .2s,box-shadow .2s;}
+    .form-input:focus{border-color:var(--blue);box-shadow:0 0 10px rgba(0,212,255,.15);}
+    .form-select{appearance:none;background-image:none;}
+
+    /* SETTINGS */
+    .settings-row{display:flex;align-items:center;justify-content:space-between;
+      padding:.65rem 0;border-bottom:1px solid rgba(0,212,255,.07);font-size:.85rem;}
+    .settings-row:last-child{border-bottom:none;}
+    .toggle{position:relative;width:2.4rem;height:1.3rem;cursor:pointer;}
+    .toggle input{display:none;}
+    .toggle-track{position:absolute;inset:0;border-radius:2rem;background:rgba(255,255,255,.1);
+      border:1px solid var(--border);transition:background .2s;}
+    .toggle input:checked~.toggle-track{background:var(--green);}
+    .toggle-thumb{position:absolute;top:2px;left:2px;width:calc(1.3rem - 6px);height:calc(1.3rem - 6px);
+      border-radius:50%;background:#fff;transition:transform .2s;pointer-events:none;}
+    .toggle input:checked~.toggle-thumb{transform:translateX(1.1rem);}
+
+    /* MODAL */
+    .modal-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.65);
+      backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:1rem;}
+    .modal-overlay.open{display:flex;animation:fadeIn .25s ease both;}
+    .modal{background:#040f22;border:1px solid var(--border);border-radius:1rem;padding:1.8rem;
+      max-width:460px;width:100%;box-shadow:0 0 40px rgba(0,212,255,.12);}
+    .modal-title{font-size:1rem;font-weight:700;margin-bottom:1rem;color:var(--green);}
+    .modal-body{font-size:.85rem;color:var(--muted);line-height:1.7;}
+    .modal-footer{display:flex;gap:.6rem;margin-top:1.2rem;}
+    .modal-close{flex:1;padding:.6rem;border:1px solid var(--border);
+      border-radius:.5rem;background:none;color:var(--muted);cursor:pointer;font-family:inherit;transition:border-color .2s,color .2s;}
+    .modal-close:hover{border-color:var(--blue);color:var(--blue);}
+    .modal-action{flex:1;padding:.6rem;border:1px solid rgba(0,255,136,.35);
+      border-radius:.5rem;background:var(--green-dim);color:var(--green);cursor:pointer;font-family:inherit;
+      font-size:.85rem;font-weight:600;transition:background .2s;}
+    .modal-action:hover{background:rgba(0,255,136,.2);}
+
+    /* TOAST */
+    .toast{position:fixed;bottom:1.8rem;left:50%;transform:translateX(-50%) translateY(60px);
+      background:var(--green);color:#000;font-weight:700;padding:.65rem 1.4rem;
+      border-radius:2rem;font-size:.85rem;z-index:999;
+      transition:transform .4s cubic-bezier(.34,1.56,.64,1),opacity .4s;opacity:0;white-space:nowrap;}
+    .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+    .toast.blue{background:var(--blue);} .toast.red{background:var(--red);}
+
+    /* SCROLLBARS */
+    ::-webkit-scrollbar{width:5px;height:5px;}
+    ::-webkit-scrollbar-track{background:transparent;}
+    ::-webkit-scrollbar-thumb{background:rgba(0,212,255,.2);border-radius:3px;}
+
+    @media(max-width:1050px){.grid-4{grid-template-columns:repeat(2,1fr);}.grid-3{grid-template-columns:1fr 1fr;}}
+    @media(max-width:680px){
+      .sidebar{position:fixed;z-index:50;transform:translateX(-100%);}
+      .sidebar.open{transform:translateX(0);}
+      .sidebar-overlay.open{display:block;}
+      .hamburger{display:block;}
+      .main{padding:1rem;padding-top:3.5rem;}
+      .grid-4,.grid-3,.grid-2{grid-template-columns:1fr;}
+      .station-grid{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<div class="shell">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="logo" onclick="navigate('dashboard')">
+      <span style="font-size:1.4rem">⚡</span>
+      <span class="logo-text">EV Analysis</span>
+    </div>
+
+    <div class="nav-section">Overview</div>
+    <button class="nav-item active" data-section="dashboard" onclick="navigate('dashboard')">
+      <span class="ni">📊</span> Dashboard
+    </button>
+    <button class="nav-item" data-section="fleet" onclick="navigate('fleet')">
+      <span class="ni">🚗</span> Fleet Management
+    </button>
+
+    <div class="nav-section">Operations</div>
+    <button class="nav-item" data-section="drivers" onclick="navigate('drivers')">
+      <span class="ni">👥</span> Drivers
+    </button>
+    <button class="nav-item" data-section="vehicles" onclick="navigate('vehicles')">
+      <span class="ni">🚗</span> Vehicle Performance
+    </button>
+    <button class="nav-item" data-section="battery" onclick="navigate('battery')">
+      <span class="ni">🔋</span> Battery Monitor
+    </button>
+    <button class="nav-item" data-section="stations" onclick="navigate('stations')">
+      <span class="ni">⚡</span> Charging Stations
+    </button>
+    <button class="nav-item" data-section="charging-analytics" onclick="navigate('charging-analytics')">
+      <span class="ni">📡</span> Charging Analytics
+    </button>
+    <button class="nav-item" data-section="analytics" onclick="navigate('analytics')">
+      <span class="ni">📈</span> Analytics
+    </button>
+    <button class="nav-item" data-section="revenue" onclick="navigate('revenue')">
+      <span class="ni">💰</span> Revenue
+    </button>
+
+    <div class="nav-section">System</div>
+    <button class="nav-item" data-section="maintenance" onclick="navigate('maintenance')">
+      <span class="ni">🔧</span> Maintenance
+    </button>
+    <button class="nav-item" data-section="alerts" onclick="navigate('alerts')">
+      <span class="ni">🔔</span> Alerts
+      <span class="nav-badge" id="alert-nav-badge">3</span>
+    </button>
+    <button class="nav-item" data-section="reports" onclick="navigate('reports')">
+      <span class="ni">📋</span> Reports
+    </button>
+    <button class="nav-item" data-section="settings" onclick="navigate('settings')">
+      <span class="ni">⚙️</span> Settings
+    </button>
+
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <div class="avatar" id="sb-admin-avatar">🧑‍💼</div>
+        <div class="user-info">
+          <div class="uname" id="sb-admin-name">Sarah Admin</div>
+          <div class="urole" id="sb-admin-role">Admin · ADM00001</div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="logout()">⏻ Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- ═══════════════ DASHBOARD ═══════════════ -->
+    <div class="section active" id="sec-dashboard">
+      <div class="topbar">
+        <h2>Admin <span>Dashboard</span></h2>
+        <div class="topbar-right">
+          <span class="badge-pill red" style="cursor:pointer" onclick="navigate('alerts')">🔔 <span id="alert-count">3</span> Alerts</span>
+          <span class="badge-pill green">● System Online</span>
+          <span class="badge-pill" id="clock-pill">📅 --</span>
+        </div>
+      </div>
+
+      <!-- FLEET STATS -->
+      <div class="grid-4">
+        <div class="card stat-card" onclick="navigate('fleet')">
+          <div class="stat-icon">🚗</div>
+          <div class="stat-value blue">48</div>
+          <div class="stat-label">Total Vehicles</div>
+          <div class="stat-delta">Fleet capacity</div>
+        </div>
+        <div class="card stat-card" onclick="showModal('Active Vehicles','31 vehicles currently on road.\nRoutes active across 8 zones.\nAvg speed: 52 km/h\nTotal distance today: 2,418 km')">
+          <div class="stat-icon">✅</div>
+          <div class="stat-value green" id="stat-active">31</div>
+          <div class="stat-label">Active on Road</div>
+          <div class="stat-delta">↑ 3 since yesterday</div>
+        </div>
+        <div class="card stat-card" onclick="showModal('Idle Vehicles','9 vehicles currently in depot.\nVehicles: EV-3017, EV-3022, EV-3031, EV-3040, EV-3041, EV-3044, EV-3045, EV-3047, EV-3048\nAvg idle time: 2h 14m')">
+          <div class="stat-icon">💤</div>
+          <div class="stat-value orange">9</div>
+          <div class="stat-label">Idle Vehicles</div>
+          <div class="stat-delta">In depot</div>
+        </div>
+        <div class="card stat-card" onclick="navigate('stations')">
+          <div class="stat-icon">🔌</div>
+          <div class="stat-value blue" id="stat-charging">8</div>
+          <div class="stat-label">Charging Now</div>
+          <div class="stat-delta">2 fast · 6 standard</div>
+        </div>
+      </div>
+
+      <!-- ANALYTICS ROW -->
+      <div class="grid-3">
+        <!-- Donut -->
+        <div class="card">
+          <div class="card-title">🚗 Fleet Status Breakdown</div>
+          <div class="donut-wrap">
+            <svg width="110" height="110" viewBox="0 0 110 110" style="flex-shrink:0;">
+              <circle cx="55" cy="55" r="40" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="18"/>
+              <circle cx="55" cy="55" r="40" fill="none" stroke="var(--green)" stroke-width="18"
+                stroke-dasharray="163 88" stroke-dashoffset="251" transform="rotate(-90 55 55)"/>
+              <circle cx="55" cy="55" r="40" fill="none" stroke="var(--blue)" stroke-width="18"
+                stroke-dasharray="42 209" stroke-dashoffset="88" transform="rotate(-90 55 55)"/>
+              <circle cx="55" cy="55" r="40" fill="none" stroke="var(--orange)" stroke-width="18"
+                stroke-dasharray="45 206" stroke-dashoffset="46" transform="rotate(-90 55 55)"/>
+              <text x="55" y="52" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="700">48</text>
+              <text x="55" y="64" text-anchor="middle" fill="var(--muted)" font-size="8">vehicles</text>
+            </svg>
+            <div class="donut-legend">
+              <div class="dl-row" onclick="showModal('Active Fleet','31 vehicles actively on road.\nAll assigned to drivers.\nAvg utilization: 64% today.')">
+                <div class="dl-dot" style="background:var(--green)"></div><span>Active <strong>31</strong></span>
+              </div>
+              <div class="dl-row" onclick="showModal('Charging Fleet','8 vehicles at charging stations.\n2 at fast DC chargers.\n6 at standard AC chargers.')">
+                <div class="dl-dot" style="background:var(--blue)"></div><span>Charging <strong>8</strong></span>
+              </div>
+              <div class="dl-row" onclick="showModal('Idle Fleet','9 vehicles idle in depot.\nReady for deployment.\nAvg battery: 82%.')">
+                <div class="dl-dot" style="background:var(--orange)"></div><span>Idle <strong>9</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Energy Bar Chart -->
+        <div class="card">
+          <div class="card-title">⚡ Energy Consumption (kWh) — This Week</div>
+          <div class="bar-chart" id="energy-chart"></div>
+          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+        </div>
+
+        <!-- Trend Line -->
+        <div class="card">
+          <div class="card-title">📈 Fleet Usage Trend — 7 Days</div>
+          <svg class="chart-svg" viewBox="0 0 260 75" style="height:85px;">
+            <defs>
+              <linearGradient id="lg1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#00d4ff" stop-opacity=".35"/>
+                <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path id="trend-area" fill="url(#lg1)"/>
+            <path id="trend-line" fill="none" stroke="var(--blue)" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+            <g id="trend-dots"></g>
+          </svg>
+          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLE + ALERTS -->
+      <div class="grid-2">
+        <!-- Driver table (preview) -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title">👥 Driver Overview</div>
+            <button class="action-btn green" onclick="navigate('drivers')">View All →</button>
+          </div>
+          <div class="table-wrap">
+            <table id="dash-driver-table">
+              <thead><tr>
+                <th>ID</th><th>Name</th><th>Vehicle</th><th>Status</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Alerts preview -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title">🔔 Recent Alerts</div>
+            <button class="action-btn" style="color:var(--red);border-color:rgba(255,77,109,.4)" onclick="navigate('alerts')">View All →</button>
+          </div>
+          <div class="alerts-list" id="dash-alerts"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ FLEET MANAGEMENT ═══════════════ -->
+    <div class="section" id="sec-fleet">
+      <div class="topbar"><h2>Fleet <span>Management</span></h2>
+        <button class="action-btn green" style="padding:.45rem 1rem" onclick="showModal('Add Vehicle','Vehicle registration form would open here.\nFill VIN, model, plate, assigned driver.')">+ Add Vehicle</button>
+      </div>
+      <div class="card">
+        <div class="card-title">🚗 All Fleet Vehicles</div>
+        <div class="table-wrap">
+          <table id="fleet-table">
+            <thead><tr>
+              <th>Vehicle ID</th><th>Model</th><th>Plate</th><th>Driver</th><th>Battery</th><th>Status</th><th>Odometer</th><th></th>
+            </tr></thead>
+            <tbody id="fleet-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ DRIVERS ═══════════════ -->
+    <div class="section" id="sec-drivers">
+      <div class="topbar">
+        <h2>Driver <span>Management</span></h2>
+        <button class="action-btn green" style="padding:.45rem 1rem" onclick="openAddDriver()">+ Add Driver</button>
+      </div>
+      <div class="card" id="add-driver-form" style="display:none;margin-bottom:1.4rem;">
+        <div class="card-title">➕ Add New Driver</div>
+        <div class="grid-2" style="margin-bottom:0">
+          <div>
+            <div class="form-group"><label class="form-label">Driver ID</label><input class="form-input" id="new-id" placeholder="DRV00200"/></div>
+            <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="new-name" placeholder="John Smith"/></div>
+          </div>
+          <div>
+            <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="new-email" placeholder="john@evfleet.com"/></div>
+            <div class="form-group">
+              <label class="form-label">Assigned Vehicle</label>
+              <select class="form-input form-select" id="new-vehicle">
+                <option>Tesla Model 3</option><option>Nissan Leaf</option>
+                <option>Hyundai Ioniq 6</option><option>BYD Atto 3</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.6rem;margin-top:.8rem;">
+          <button class="action-btn green" style="flex:1;padding:.6rem" onclick="addDriver()">Save Driver</button>
+          <button class="action-btn red" style="flex:1;padding:.6rem" onclick="closeAddDriver()">Cancel</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">👥 All Drivers</div>
+          <input id="driver-search" placeholder="Search drivers…" style="background:rgba(0,212,255,.05);border:1px solid var(--border);border-radius:.5rem;padding:.35rem .7rem;color:var(--text);font-size:.78rem;outline:none;width:160px;" oninput="filterDrivers(this.value)"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Driver ID</th><th>Name</th><th>Email</th><th>Vehicle</th><th>Status</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="drivers-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ STATIONS ═══════════════ -->
+    <div class="section" id="sec-stations">
+      <div class="topbar"><h2>Charging <span>Stations</span></h2></div>
+      <div class="grid-4" style="margin-bottom:1.4rem;">
+        <div class="card stat-card"><div class="stat-icon">⚡</div><div class="stat-value green">4</div><div class="stat-label">Stations Online</div></div>
+        <div class="card stat-card"><div class="stat-icon">🔌</div><div class="stat-value blue">42</div><div class="stat-label">Total Ports</div></div>
+        <div class="card stat-card"><div class="stat-icon">✅</div><div class="stat-value green">25</div><div class="stat-label">Ports In Use</div></div>
+        <div class="card stat-card"><div class="stat-icon">⚠️</div><div class="stat-value red">1</div><div class="stat-label">Faults</div></div>
+      </div>
+      <div class="grid-2" id="stations-detail"></div>
+    </div>
+
+    <!-- ═══════════════ ANALYTICS ═══════════════ -->
+    <div class="section" id="sec-analytics">
+      <div class="topbar"><h2>EV <span>Analytics</span></h2></div>
+      <div class="grid-4" style="margin-bottom:1.4rem;">
+        <div class="card stat-card"><div class="stat-icon">📍</div><div class="stat-value blue">2,418 km</div><div class="stat-label">Today Distance</div><div class="stat-delta">↑ 8%</div></div>
+        <div class="card stat-card"><div class="stat-icon">⚡</div><div class="stat-value green">512 kWh</div><div class="stat-label">Today Energy</div><div class="stat-delta">↑ 5%</div></div>
+        <div class="card stat-card"><div class="stat-icon">💚</div><div class="stat-value orange">4.7 km/kWh</div><div class="stat-label">Fleet Efficiency</div><div class="stat-delta">↑ 0.2</div></div>
+        <div class="card stat-card"><div class="stat-icon">💰</div><div class="stat-value purple">₹12,800</div><div class="stat-label">Charging Cost</div><div class="stat-delta red">↑ 3%</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">📈 Weekly Energy Trend</div>
+          <div class="bar-chart" id="analytics-chart" style="height:110px;"></div>
+          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🏆 Top Performing Drivers</div>
+          <div style="display:flex;flex-direction:column;gap:.6rem;" id="top-drivers"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ ALERTS ═══════════════ -->
+    <div class="section" id="sec-alerts">
+      <div class="topbar">
+        <h2>Alerts <span>Panel</span></h2>
+        <button class="action-btn red" onclick="dismissAll()">Dismiss All</button>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">🔔 All Alerts</div>
+          <span class="pill-small red" id="alerts-count-pill">3 Active</span>
+        </div>
+        <div class="alerts-list" style="max-height:500px;" id="all-alerts"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ REPORTS ═══════════════ -->
+    <div class="section" id="sec-reports">
+      <div class="topbar"><h2>Fleet <span>Reports</span></h2>
+        <button class="action-btn green" onclick="exportSectionToPDF('sec-reports','fleet-report.pdf')">Export PDF</button>
+      </div>
+      <div class="card" style="margin-bottom:1.4rem;">
+        <div class="report-tabs">
+          <button class="rtab active" onclick="switchTab(this,'daily')">Daily</button>
+          <button class="rtab" onclick="switchTab(this,'weekly')">Weekly</button>
+          <button class="rtab" onclick="switchTab(this,'monthly')">Monthly</button>
+        </div>
+        <div class="grid-2" style="margin-bottom:0">
+          <div>
+            <div class="report-row"><span>Total Distance</span><span class="rval" id="r-dist">2,418 km</span><span class="rdelta" id="r-dist-d">↑ 8%</span></div>
+            <div class="report-row"><span>Energy Consumed</span><span class="rval" id="r-energy">512 kWh</span><span class="rdelta" id="r-energy-d">↑ 5%</span></div>
+            <div class="report-row"><span>Active Drivers</span><span class="rval" id="r-drv">31</span><span class="rdelta" id="r-drv-d">↑ 3</span></div>
+          </div>
+          <div>
+            <div class="report-row"><span>Charging Sessions</span><span class="rval" id="r-sess">24</span><span class="rdelta" id="r-sess-d">↑ 2</span></div>
+            <div class="report-row"><span>Avg Battery Level</span><span class="rval" id="r-batt">64%</span><span class="rdelta neg" id="r-batt-d">↓ 4%</span></div>
+            <div class="report-row"><span>Fleet Efficiency</span><span class="rval" id="r-eff">4.7 km/kWh</span><span class="rdelta" id="r-eff-d">↑ 0.2</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Energy Consumption Bar Chart</div>
+        <div class="bar-chart" id="report-chart" style="height:110px;"></div>
+        <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+          <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SETTINGS ═══════════════ -->
+    <div class="section" id="sec-settings">
+      <div class="topbar"><h2>System <span>Settings</span></h2></div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">👤 Admin Profile</div>
+          <div class="form-group"><label class="form-label">Full Name / ID</label><input class="form-input" id="admin-name" value="Sarah Admin"/></div>
+          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="admin-email" value="sarah@evfleet.com"/></div>
+          <div class="form-group"><label class="form-label">Role</label><input class="form-input" value="System Administrator" readonly/></div>
+          <button class="action-btn green" style="width:100%;padding:.6rem" onclick="saveAdminProfile()">Save Changes</button>
+        </div>
+        <div class="card">
+          <div class="card-title">⚙️ System Preferences</div>
+          <div class="settings-row"><span>Email Alerts</span>
+            <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Email alerts')"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          <div class="settings-row"><span>Auto Reports (Daily)</span>
+            <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Auto reports')"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          <div class="settings-row"><span>Maintenance Warnings</span>
+            <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Maintenance warnings')"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          <div class="settings-row"><span>GPS Fleet Tracking</span>
+            <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'GPS tracking')"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          <div class="settings-row" style="border:none"><span>Driver Activity Logs</span>
+            <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Activity logs')"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ REVENUE ═══════════════ -->
+    <div class="section" id="sec-revenue">
+      <div class="topbar">
+        <h2>Fleet <span>Revenue</span></h2>
+        <button class="action-btn green" onclick="exportSectionToPDF('sec-revenue','revenue-report.pdf')">Export PDF</button>
+      </div>
+
+      <!-- TOTAL REVENUE STAT CARDS -->
+      <div class="grid-4">
+        <div class="card stat-card" onclick="showModal('Total Revenue','Fleet total revenue from all trips and charging.\nCalculated across all 48 vehicles.\nGrowth: ↑ 14% vs last month.')">
+          <div class="stat-icon">💰</div>
+          <div class="stat-value green">₹4,82,600</div>
+          <div class="stat-label">Total Revenue</div>
+          <div class="stat-delta">↑ 14% this month</div>
+        </div>
+        <div class="card stat-card" onclick="showModal('Trip Revenue','Revenue earned from passenger trips.\n31 active drivers contributing.\nAvg per driver: ₹12,480/month.')">
+          <div class="stat-icon">🚗</div>
+          <div class="stat-value blue">₹3,86,880</div>
+          <div class="stat-label">Trip Revenue</div>
+          <div class="stat-delta">↑ 11% vs last month</div>
+        </div>
+        <div class="card stat-card" onclick="showModal('Charging Revenue','Revenue from charging station usage.\n4 stations · 42 ports total.\nAvg ₹15/kWh · 512 kWh/day.')">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-value orange">₹95,720</div>
+          <div class="stat-label">Charging Revenue</div>
+          <div class="stat-delta">↑ 22% vs last month</div>
+        </div>
+        <div class="card stat-card" onclick="showModal('Net Profit','Total Revenue: ₹4,82,600\nOperating Costs: ₹1,94,400\nNet Profit: ₹2,88,200\nProfit Margin: 59.7%')">
+          <div class="stat-icon">📈</div>
+          <div class="stat-value purple">₹2,88,200</div>
+          <div class="stat-label">Net Profit</div>
+          <div class="stat-delta">Margin: 59.7%</div>
+        </div>
+      </div>
+
+      <!-- REVENUE CHART + BREAKDOWN -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title">📊 Monthly Revenue Trend (₹)</div>
+            <div style="display:flex;gap:.4rem;">
+              <button class="rtab active" onclick="switchRevTab(this,'monthly')" style="padding:.25rem .7rem;border-radius:2rem;font-size:.68rem;cursor:pointer;border:1px solid var(--border);color:var(--muted);background:none;font-family:inherit;">Monthly</button>
+              <button class="rtab" onclick="switchRevTab(this,'weekly')" style="padding:.25rem .7rem;border-radius:2rem;font-size:.68rem;cursor:pointer;border:1px solid var(--border);color:var(--muted);background:none;font-family:inherit;">Weekly</button>
+            </div>
+          </div>
+          <div class="bar-chart" id="rev-chart" style="height:120px;"></div>
+          <div id="rev-chart-labels" style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+            <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🍩 Revenue Breakdown</div>
+          <div style="display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;">
+            <svg width="110" height="110" viewBox="0 0 110 110" style="flex-shrink:0;">
+              <circle cx="55" cy="55" r="40" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="18"/>
+              <!-- Trips 80% -->
+              <circle cx="55" cy="55" r="40" fill="none" stroke="var(--blue)" stroke-width="18"
+                stroke-dasharray="201 50" stroke-dashoffset="251" transform="rotate(-90 55 55)"/>
+              <!-- Charging 20% -->
+              <circle cx="55" cy="55" r="40" fill="none" stroke="var(--orange)" stroke-width="18"
+                stroke-dasharray="50 201" stroke-dashoffset="50" transform="rotate(-90 55 55)"/>
+              <text x="55" y="51" text-anchor="middle" fill="var(--text)" font-size="11" font-weight="700">₹4.8L</text>
+              <text x="55" y="63" text-anchor="middle" fill="var(--muted)" font-size="7.5">total</text>
+            </svg>
+            <div style="display:flex;flex-direction:column;gap:.6rem;">
+              <div style="display:flex;align-items:center;gap:.6rem;font-size:.8rem;cursor:pointer;" onclick="showModal('Trip Revenue Breakdown','Trips contribute 80.2% of total revenue.\nTotal: ₹3,86,880\n31 active drivers · 712 trips this month\nAvg trip value: ₹543')">
+                <div style="width:10px;height:10px;border-radius:50%;background:var(--blue);flex-shrink:0;"></div>
+                <span>Trips <strong style="color:var(--blue)">80.2%</strong></span>
+              </div>
+              <div style="display:flex;align-items:center;gap:.6rem;font-size:.8rem;cursor:pointer;" onclick="showModal('Charging Revenue Breakdown','Charging contributes 19.8% of total revenue.\nTotal: ₹95,720\n4 stations · 1,820 sessions this month\nAvg session value: ₹52.6')">
+                <div style="width:10px;height:10px;border-radius:50%;background:var(--orange);flex-shrink:0;"></div>
+                <span>Charging <strong style="color:var(--orange)">19.8%</strong></span>
+              </div>
+              <div style="margin-top:.4rem;padding:.5rem .8rem;background:var(--green-dim);border:1px solid rgba(0,255,136,.25);border-radius:.6rem;font-size:.75rem;">
+                <div style="color:var(--muted);">Best Day</div>
+                <div style="font-weight:700;color:var(--green);">Thursday · ₹28,400</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PER-DRIVER REVENUE TABLE -->
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">👥 Revenue Per Driver — This Month</div>
+          <input id="rev-driver-search" placeholder="Search driver…"
+            style="background:rgba(0,212,255,.05);border:1px solid var(--border);border-radius:.5rem;
+            padding:.32rem .7rem;color:var(--text);font-size:.76rem;outline:none;width:150px;"
+            oninput="filterRevDrivers(this.value)"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Driver ID</th><th>Name</th><th>Vehicle</th>
+              <th>Trips</th><th>Trip Income</th><th>Charging Cost</th><th>Net Earnings</th><th>Status</th>
+            </tr></thead>
+            <tbody id="rev-driver-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DAILY REVENUE BREAKDOWN -->
+      <div class="card" style="margin-top:1.4rem;">
+        <div class="card-title">📅 Daily Revenue — This Week</div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr>
+              <th>Day</th><th>Trip Revenue</th><th>Charging Revenue</th><th>Total</th><th>Drivers Active</th><th>Trips</th>
+            </tr></thead>
+            <tbody id="daily-rev-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════ BATTERY MONITORING ═══════ -->
+    <div class="section" id="sec-battery">
+      <div class="topbar"><h2>Battery <span>Monitoring</span></h2></div>
+
+      <div class="grid-4">
+        <div class="card stat-card"><div class="stat-icon">🔋</div><div class="stat-value green">67%</div><div class="stat-label">Fleet Avg Battery</div><div class="stat-delta">48 vehicles</div></div>
+        <div class="card stat-card" onclick="showModal('Healthy Batteries','38 vehicles with battery > 20%.\nAll cleared for duty.\nAvg SOH: 94%')"><div class="stat-icon">✅</div><div class="stat-value green">38</div><div class="stat-label">Healthy (&gt;20%)</div><div class="stat-delta">Ready for duty</div></div>
+        <div class="card stat-card" onclick="showModal('Low Battery Alert','7 vehicles below 20% battery.\nImmediate charging required.\nVehicles: EV-2940, EV-3011, EV-3044, EV-3045, EV-4005, EV-4012, EV-4019')"><div class="stat-icon">⚠️</div><div class="stat-value red" id="low-batt-count">7</div><div class="stat-label">Low Battery (&lt;20%)</div><div class="stat-delta red">Charge immediately</div></div>
+        <div class="card stat-card"><div class="stat-icon">🏥</div><div class="stat-value blue">94%</div><div class="stat-label">Avg Battery Health</div><div class="stat-delta">SOH across fleet</div></div>
+      </div>
+
+      <!-- PER-VEHICLE BATTERY TABLE -->
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">🔋 Fleet Battery Status</div>
+          <input placeholder="Search vehicle…" id="batt-search"
+            style="background:rgba(0,212,255,.05);border:1px solid var(--border);border-radius:.5rem;
+            padding:.32rem .7rem;color:var(--text);font-size:.76rem;outline:none;width:150px;"
+            oninput="filterBattTable(this.value)"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Vehicle ID</th><th>Driver</th><th>Brand</th><th>Battery %</th><th>Health (SOH)</th>
+              <th>Capacity (kWh)</th><th>Status</th><th>Warning</th>
+            </tr></thead>
+            <tbody id="batt-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ VEHICLE PERFORMANCE TABLE ═══════ -->
+    <div class="section" id="sec-vehicles">
+      <div class="topbar">
+        <h2>Vehicle <span>Performance</span></h2>
+        <button class="action-btn green" onclick="exportSectionToPDF('sec-vehicles','vehicle-report.pdf')">Export</button>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">🚗 All Vehicles — Performance Data</div>
+          <input placeholder="Search…" id="veh-search"
+            style="background:rgba(0,212,255,.05);border:1px solid var(--border);border-radius:.5rem;
+            padding:.32rem .7rem;color:var(--text);font-size:.76rem;outline:none;width:150px;"
+            oninput="filterVehTable(this.value)"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Vehicle ID</th><th>Driver</th><th>Brand</th><th>Speed</th>
+              <th>City/Highway</th><th>Motor Spec</th><th>Engine kWh</th>
+              <th>Weight (kg)</th><th>Overspeed</th><th>Status</th>
+            </tr></thead>
+            <tbody id="veh-perf-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ CHARGING ANALYTICS ═══════ -->
+    <div class="section" id="sec-charging-analytics">
+      <div class="topbar"><h2>Charging <span>Analytics</span></h2>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <button class="action-btn" onclick="openChargingCinematicAdmin()">Cinematic</button>
+        </div>
+      </div>
+
+      <div class="grid-4">
+        <div class="card stat-card"><div class="stat-icon">⚡</div><div class="stat-value blue">24</div><div class="stat-label">Sessions Today</div><div class="stat-delta">↑ 2 vs yesterday</div></div>
+        <div class="card stat-card"><div class="stat-icon">💰</div><div class="stat-value green">₹12,480</div><div class="stat-label">Charging Revenue</div><div class="stat-delta">Today</div></div>
+        <div class="card stat-card"><div class="stat-icon">🔋</div><div class="stat-value orange">512 kWh</div><div class="stat-label">Energy Dispensed</div><div class="stat-delta">Today</div></div>
+        <div class="card stat-card"><div class="stat-icon">⏱️</div><div class="stat-value purple">1h 48m</div><div class="stat-label">Avg Session Time</div><div class="stat-delta">All stations</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">💰 Charging Cost Trend — This Week</div>
+          <div class="bar-chart" id="charge-cost-chart" style="height:110px;"></div>
+          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🔌 Charging Status by Station</div>
+          <div style="display:flex;flex-direction:column;gap:.7rem;" id="charge-status-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⚡ Charging Sessions Log</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Time</th><th>Vehicle ID</th><th>Driver</th><th>Station</th>
+              <th>kWh</th><th>Cost</th><th>Duration</th><th>Status</th>
+            </tr></thead>
+            <tbody id="charge-log-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ MAINTENANCE & ALERTS ═══════ -->
+    <div class="section" id="sec-maintenance">
+      <div class="topbar"><h2>Maintenance <span>&amp; Alerts</span></h2>
+        <button class="action-btn red" onclick="dismissAllMaint()">Clear All</button>
+      </div>
+
+      <div class="grid-4">
+        <div class="card stat-card"><div class="stat-icon">🔴</div><div class="stat-value red" id="maint-critical">3</div><div class="stat-label">Critical</div><div class="stat-delta">Immediate action</div></div>
+        <div class="card stat-card"><div class="stat-icon">🟡</div><div class="stat-value orange" id="maint-warn">5</div><div class="stat-label">Warnings</div><div class="stat-delta">Monitor closely</div></div>
+        <div class="card stat-card"><div class="stat-icon">🔵</div><div class="stat-value blue">4</div><div class="stat-label">Scheduled</div><div class="stat-delta">This week</div></div>
+        <div class="card stat-card"><div class="stat-icon">✅</div><div class="stat-value green">36</div><div class="stat-label">All Clear</div><div class="stat-delta">No issues</div></div>
+      </div>
+
+      <!-- ALERT CARDS -->
+      <div class="card" style="margin-bottom:1.4rem;">
+        <div class="card-title-row">
+          <div class="card-title">🚨 Active Alerts</div>
+          <span class="pill-small red" id="maint-alert-count">3 Critical</span>
+        </div>
+        <div id="maint-alerts-list" style="display:flex;flex-direction:column;gap:.7rem;"></div>
+      </div>
+
+      <!-- MAINTENANCE TABLE -->
+      <div class="card">
+        <div class="card-title">🔧 Maintenance Schedule & Breakdown Log</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Vehicle ID</th><th>Driver</th><th>Type</th><th>Due Date</th>
+              <th>Breakdown</th><th>Overspeed</th><th>Priority</th><th>Action</th>
+            </tr></thead>
+            <tbody id="maint-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="modal-close" onclick="closeModalDirect()">Close</button>
+      <button class="modal-action" id="modal-action-btn" style="display:none" onclick="modalActionFn()">Action</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- PDF Spinner Overlay -->
+<div id="pdf-spinner" style="display:none;position:fixed;inset:0;z-index:1300;align-items:center;justify-content:center;background:rgba(0,0,0,.6)"> 
+  <div style="background:#fff;padding:18px 22px;border-radius:8px;display:flex;flex-direction:column;align-items:center;gap:10px;min-width:260px">
+    <div style="width:48px;height:48px;border-radius:50%;border:6px solid #e6f7f0;border-top-color:#00a884;animation:spin .9s linear infinite"></div>
+    <div style="font-weight:700;color:#0b2b24">Preparing PDF…</div>
+    <div style="font-size:12px;color:#666;text-align:center">This may take a few seconds for long reports.</div>
+  </div>
+</div>
+
+<style>@keyframes spin{to{transform:rotate(360deg)}}#pdf-spinner{display:flex}</style>
+
+<!-- CINEMATIC OVERLAY (admin) -->
+<div id="cinema-overlay-admin" onclick="closeChargingCinematicAdmin()">
+  <div class="cinema-stage-admin" onclick="event.stopPropagation()">
+    <button class="cinema-close-admin" onclick="closeChargingCinematicAdmin()">✕ Close</button>
+    <canvas id="cinema-canvas-admin"></canvas>
+    <div class="cinema-battery-admin" aria-hidden="true">
+      <svg viewBox="0 0 120 240" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="liqGradAdmin" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#00ffcc" stop-opacity=".95"/>
+            <stop offset="100%" stop-color="#0059ff" stop-opacity=".85"/>
+          </linearGradient>
+          <mask id="fillMaskAdmin"><rect id="maskRectAdmin" x="0" y="0" width="120" height="240" fill="#fff"/></mask>
+        </defs>
+        <rect x="8" y="16" width="104" height="200" rx="10" ry="10" fill="rgba(255,255,255,.02)" stroke="rgba(255,255,255,.04)" stroke-width="1.2"/>
+        <g mask="url(#fillMaskAdmin)">
+          <rect x="10" y="20" width="100" height="200" fill="url(#liqGradAdmin)" />
+          <g id="bubblesAdmin" opacity=".85"></g>
+        </g>
+        <rect x="8" y="16" width="104" height="200" rx="10" ry="10" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+        <rect x="44" y="0" width="32" height="8" rx="2" fill="rgba(255,255,255,.06)" />
+      </svg>
+    </div>
+    <div class="cinema-hud-admin">
+      <div>Charging…</div>
+      <div class="val" id="cinema-batt-val-admin">78%</div>
+      <div style="margin-top:.6rem;color:var(--muted)">Estimated finish: <span id="cinema-finish-admin">2h 10m</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── BG CANVAS ── */
+(function(){
+  const cv=document.getElementById('bg-canvas'),ctx=cv.getContext('2d');
+  let W,H,p=[],g=0;
+  function resize(){W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;}
+  function init(){p=[];const n=Math.floor(W*H/20000);
+    for(let i=0;i<n;i++)p.push({x:Math.random()*W,y:Math.random()*H,
+      r:Math.random()*1.5+.3,dx:(Math.random()-.5)*.22,dy:(Math.random()-.5)*.22,
+      a:Math.random()*.5+.15,c:Math.random()>.5?'0,212,255':'0,255,136'});}
+  function frame(){ctx.clearRect(0,0,W,H);g+=.18;
+    const s=55,o=g%s;ctx.strokeStyle='rgba(0,212,255,.03)';ctx.lineWidth=1;
+    for(let x=-s+o;x<W+s;x+=s){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=-s+o;y<H+s;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    p.forEach(q=>{q.x+=q.dx;q.y+=q.dy;
+      if(q.x<0)q.x=W;if(q.x>W)q.x=0;if(q.y<0)q.y=H;if(q.y>H)q.y=0;
+      ctx.beginPath();ctx.arc(q.x,q.y,q.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(${q.c},${q.a})`;ctx.fill();});
+    requestAnimationFrame(frame);}
+  window.addEventListener('resize',()=>{resize();init();});
+  resize();init();frame();
+})();
+
+/* ── LOAD USER SESSION ── */
+(function(){
+  const id    = sessionStorage.getItem('ev_user_id')      || 'ADM00001';
+  const email = sessionStorage.getItem('ev_user_email')   || 'admin@evfleet.com';
+  const name  = sessionStorage.getItem('ev_display_name') || id;
+  document.getElementById('sb-admin-name').textContent = name;
+  document.getElementById('sb-admin-role').textContent = `Admin · ${id.toUpperCase()}`;
+  const av = document.getElementById('sb-admin-avatar');
+  if(av) av.textContent = name.charAt(0).toUpperCase();
+  const nameEl  = document.getElementById('admin-name');
+  if(nameEl)  nameEl.value  = name;
+  const emailEl = document.getElementById('admin-email');
+  if(emailEl) emailEl.value = email;
+})();
+
+/* ── CLOCK ── */
+function updateClock(){
+  const now=new Date();
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const t=`${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  document.getElementById('clock-pill').textContent=
+    `📅 ${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()} · ${t}`;
+}
+setInterval(updateClock,1000); updateClock();
+
+/* ── CHARTS ── */
+const energyVals=[480,520,445,610,590,380,415];
+function buildBarChart(id,vals,color=''){
+  const chart=document.getElementById(id);
+  if(!chart||chart.children.length) return;
+  const max=Math.max(...vals);
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  vals.forEach((v,i)=>{
+    const col=document.createElement('div');col.className='bc-col';
+    const bar=document.createElement('div');bar.className='bc-bar'+(color?' '+color:'');
+    const pct = Math.round(v/max*100);
+    // start collapsed for animation
+    bar.style.height='6px';
+    bar.title=`${days[i]}: ${v} kWh`;
+    // color by relative value
+    if(pct>=85) bar.classList.add('green');
+    else if(pct<=45) bar.classList.add('orange');
+    bar.onclick=()=>showModal(`${days[i]} Energy Usage`,`Energy consumed: ${v} kWh\nVehicles active: ${24+i*2}\nAvg per vehicle: ${(v/(24+i*2)).toFixed(1)} kWh`);
+    col.appendChild(bar);chart.appendChild(col);
+    // animate to target height
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{ bar.style.height = pct+'%'; });
+    });
+  });
+}
+
+function buildTrendLine(){
+  const vals=[28,35,30,42,38,25,31];
+  const W=260,H=65,pad=6;
+  const max=Math.max(...vals),min=Math.min(...vals);
+  const pts=vals.map((v,i)=>[pad+i*(W-pad*2)/(vals.length-1),H-pad-(v-min)/(max-min||1)*(H-pad*2)]);
+  const d=pts.map((p,i)=>i===0?`M${p[0]},${p[1]}`:`L${p[0]},${p[1]}`).join(' ');
+  document.getElementById('trend-line').setAttribute('d',d);
+  document.getElementById('trend-area').setAttribute('d',d+` L${pts[pts.length-1][0]},${H} L${pts[0][0]},${H} Z`);
+  const g=document.getElementById('trend-dots');
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  pts.forEach((p,i)=>{
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx',p[0]);c.setAttribute('cy',p[1]);c.setAttribute('r','3.5');
+    c.setAttribute('fill','var(--blue)');c.setAttribute('stroke','var(--bg)');c.setAttribute('stroke-width','1.5');
+    c.style.cursor='pointer';
+    c.onclick=()=>showModal(`${days[i]} Fleet Usage`,`Active vehicles: ${vals[i]}\nPeak usage at: 09:00–11:00\nTotal distance: ${vals[i]*78} km`);
+    g.appendChild(c);
+  });
+}
+
+/* ── DRIVER DATA ── */
+let drivers=[
+  {id:'DRV00142',name:'Alex Driver',email:'alex@evfleet.com',vehicle:'Tesla Model 3',status:'active'},
+  {id:'DRV00137',name:'Maria Chen',email:'maria@evfleet.com',vehicle:'Nissan Leaf',status:'charging'},
+  {id:'DRV00129',name:'James Wilson',email:'james@evfleet.com',vehicle:'Hyundai Ioniq',status:'idle'},
+  {id:'DRV00118',name:'Priya Sharma',email:'priya@evfleet.com',vehicle:'Tesla Model Y',status:'active'},
+  {id:'DRV00105',name:'Omar Hassan',email:'omar@evfleet.com',vehicle:'BYD Atto 3',status:'offline'},
+  {id:'DRV00098',name:'Lisa Park',email:'lisa@evfleet.com',vehicle:'Tesla Model 3',status:'active'},
+];
+
+function renderDriverTable(data,tbodyId){
+  const tb=document.getElementById(tbodyId);
+  tb.innerHTML='';
+  data.forEach(d=>{
+    const tr=document.createElement('tr');
+    tr.style.cursor='pointer';
+    if(tbodyId==='drivers-tbody'){
+      tr.innerHTML=`
+        <td class="td-id">${d.id}</td>
+        <td>${d.name}</td>
+        <td style="color:var(--muted);font-size:.76rem">${d.email}</td>
+        <td>${d.vehicle}</td>
+        <td><span class="status-badge ${d.status}"><span class="dot"></span>${d.status.charAt(0).toUpperCase()+d.status.slice(1)}</span></td>
+        <td>
+          <button class="action-btn" onclick="event.stopPropagation();editDriver('${d.id}')">Edit</button>
+          <button class="action-btn red" style="margin-left:.3rem" onclick="event.stopPropagation();removeDriver('${d.id}')">✕</button>
+        </td>`;
+    } else {
+      tr.innerHTML=`
+        <td class="td-id">${d.id}</td>
+        <td>${d.name}</td>
+        <td>${d.vehicle}</td>
+        <td><span class="status-badge ${d.status}"><span class="dot"></span>${d.status.charAt(0).toUpperCase()+d.status.slice(1)}</span></td>`;
+    }
+    tr.onmouseenter=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='rgba(0,212,255,.04)');
+    tr.onmouseleave=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='');
+    tr.onclick=()=>showModal(`Driver: ${d.name}`,`ID: ${d.id}\nEmail: ${d.email}\nVehicle: ${d.vehicle}\nStatus: ${d.status.toUpperCase()}`);
+    tb.appendChild(tr);
+  });
+}
+
+function filterDrivers(q){
+  const filtered=drivers.filter(d=>
+    d.name.toLowerCase().includes(q.toLowerCase())||
+    d.id.toLowerCase().includes(q.toLowerCase())||
+    d.email.toLowerCase().includes(q.toLowerCase())
+  );
+  renderDriverTable(filtered,'drivers-tbody');
+}
+
+function addDriver(){
+  const id=document.getElementById('new-id').value.trim();
+  const name=document.getElementById('new-name').value.trim();
+  const email=document.getElementById('new-email').value.trim();
+  const vehicle=document.getElementById('new-vehicle').value;
+  if(!id||!name||!email){showToast('⚠️ Please fill all fields','red');return;}
+  drivers.unshift({id,name,email,vehicle,status:'idle'});
+  renderDriverTable(drivers,'drivers-tbody');
+  renderDriverTable(drivers.slice(0,5),'dash-driver-table-tbody'||'');
+  closeAddDriver();
+  showToast(`✅ Driver ${name} added successfully!`);
+}
+
+function editDriver(id){
+  const d=drivers.find(x=>x.id===id);
+  if(!d) return;
+  showModal(`Edit Driver: ${d.name}`,
+    `ID: ${d.id}\nCurrent status: ${d.status}\n\nTo edit, use the profile form.\nStatus changes take effect immediately.`,
+    'Change Status',()=>{
+      const statuses=['active','idle','offline','charging'];
+      const next=statuses[(statuses.indexOf(d.status)+1)%statuses.length];
+      d.status=next;
+      renderDriverTable(drivers,'drivers-tbody');
+      closeModalDirect();
+      showToast(`✅ ${d.name} status → ${next}`);
+    });
+}
+
+function removeDriver(id){
+  const d=drivers.find(x=>x.id===id);
+  if(!d) return;
+  showModal(`Remove ${d.name}?`,
+    `Are you sure you want to remove ${d.name} (${d.id}) from the fleet?\nThis action cannot be undone.`,
+    'Confirm Remove',()=>{
+      drivers=drivers.filter(x=>x.id!==id);
+      renderDriverTable(drivers,'drivers-tbody');
+      closeModalDirect();
+      showToast(`🗑️ Driver ${d.name} removed`,'red');
+    });
+}
+
+function openAddDriver(){document.getElementById('add-driver-form').style.display='block';}
+function closeAddDriver(){
+  document.getElementById('add-driver-form').style.display='none';
+  ['new-id','new-name','new-email'].forEach(id=>document.getElementById(id).value='');
+}
+
+/* ── FLEET TABLE ── */
+const fleetData=[
+  {id:'EV-4021',model:'Tesla Model 3',plate:'EV-4021-TN',driver:'Alex Driver',batt:78,status:'active',odo:'24,182 km'},
+  {id:'EV-3818',model:'Nissan Leaf',plate:'EV-3818-TN',driver:'Maria Chen',batt:45,status:'charging',odo:'31,450 km'},
+  {id:'EV-3017',model:'Hyundai Ioniq',plate:'EV-3017-TN',driver:'James Wilson',batt:62,status:'idle',odo:'18,920 km'},
+  {id:'EV-4102',model:'Tesla Model Y',plate:'EV-4102-TN',driver:'Priya Sharma',batt:88,status:'active',odo:'9,340 km'},
+  {id:'EV-2940',model:'BYD Atto 3',plate:'EV-2940-TN',driver:'Omar Hassan',batt:8,status:'offline',odo:'42,100 km'},
+  {id:'EV-4301',model:'Tesla Model 3',plate:'EV-4301-TN',driver:'Lisa Park',batt:91,status:'active',odo:'5,600 km'},
+];
+function initFleetTable(){
+  const tb=document.getElementById('fleet-tbody');
+  if(tb&&tb.children.length) return;
+  fleetData.forEach(v=>{
+    const tr=document.createElement('tr');tr.style.cursor='pointer';
+    const battColor=v.batt<20?'var(--red)':v.batt<50?'var(--orange)':'var(--green)';
+    tr.innerHTML=`
+      <td class="td-id">${v.id}</td><td>${v.model}</td><td style="color:var(--muted)">${v.plate}</td>
+      <td>${v.driver}</td>
+      <td><span style="color:${battColor};font-weight:700">${v.batt}%</span></td>
+      <td><span class="status-badge ${v.status}"><span class="dot"></span>${v.status.charAt(0).toUpperCase()+v.status.slice(1)}</span></td>
+      <td style="color:var(--muted);font-size:.76rem">${v.odo}</td>
+      <td><button class="action-btn" onclick="event.stopPropagation();showModal('Vehicle ${v.id}','Model: ${v.model}\nPlate: ${v.plate}\nDriver: ${v.driver}\nBattery: ${v.batt}%\nStatus: ${v.status}\nOdometer: ${v.odo}')">Details</button></td>`;
+    tr.onmouseenter=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='rgba(0,212,255,.04)');
+    tr.onmouseleave=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='');
+    tr.onclick=()=>showModal(`Vehicle ${v.id}`,`Model: ${v.model}\nPlate: ${v.plate}\nDriver: ${v.driver}\nBattery: ${v.batt}%\nStatus: ${v.status.toUpperCase()}\nOdometer: ${v.odo}`);
+    tb.appendChild(tr);
+  });
+}
+
+/* ── ALERTS DATA ── */
+let alertsData=[
+  {type:'crit',icon:'🪫',title:'Low Battery — DRV00105',sub:'BYD Atto 3 · Battery at 8% — Immediate charge required',time:'2m ago'},
+  {type:'warn',icon:'🔧',title:'Maintenance Due — EV-3017',sub:'Hyundai Ioniq — Service overdue by 420 km',time:'18m ago'},
+  {type:'crit',icon:'⚠️',title:'Charging Station Fault',sub:'Green Point Station · Port #3 offline',time:'34m ago'},
+  {type:'info',icon:'📍',title:'Geo-fence Alert — DRV00118',sub:'Tesla Model Y left designated zone',time:'1h ago'},
+  {type:'warn',icon:'🌡️',title:'High Battery Temp — EV-4021',sub:'Tesla Model 3 · Cell temp 41°C, monitor closely',time:'2h ago'},
+];
+
+function renderAlerts(containerId){
+  const container=document.getElementById(containerId);
+  if(!container) return;
+  container.innerHTML='';
+  if(!alertsData.length){
+    container.innerHTML='<div style="text-align:center;color:var(--muted);padding:2rem;font-size:.85rem;">✅ No active alerts</div>';
+    return;
+  }
+  alertsData.forEach((a,i)=>{
+    const div=document.createElement('div');
+    div.className=`alert-item ${a.type}`;
+    div.innerHTML=`
+      <span class="alert-icon">${a.icon}</span>
+      <div style="flex:1"><div class="alert-title">${a.title}</div><div class="alert-sub">${a.sub}</div></div>
+      <span class="alert-time">${a.time}</span>
+      <button class="alert-dismiss" onclick="event.stopPropagation();dismissAlert(${i})" title="Dismiss">✕</button>`;
+    div.onclick=()=>showModal(a.title,`${a.sub}\nTime: ${a.time}\nPriority: ${a.type==='crit'?'CRITICAL':a.type==='warn'?'WARNING':'INFO'}`);
+    container.appendChild(div);
+  });
+}
+
+function dismissAlert(idx){
+  alertsData.splice(idx,1);
+  const count=alertsData.length;
+  document.getElementById('alert-count').textContent=count;
+  document.getElementById('alert-nav-badge').textContent=count;
+  document.getElementById('alerts-count-pill').textContent=count+' Active';
+  renderAlerts('all-alerts');
+  renderAlerts('dash-alerts');
+  showToast(`🗑️ Alert dismissed · ${count} remaining`);
+}
+
+function dismissAll(){
+  alertsData=[];
+  const count=0;
+  document.getElementById('alert-count').textContent=count;
+  document.getElementById('alert-nav-badge').textContent=count;
+  document.getElementById('alerts-count-pill').textContent='0 Active';
+  renderAlerts('all-alerts');
+  renderAlerts('dash-alerts');
+  showToast('✅ All alerts cleared!');
+}
+
+/* ── STATIONS DETAIL ── */
+const stationsDetail=[
+  {name:'EV Hub Central',meta:'12 ports · Fast DC · 150 kW',used:8,total:12,status:'Online',statusColor:'var(--green)',info:'EV Hub Central\nPorts: 12 (8 in use)\nType: Fast DC · 150 kW\nRevenue today: ₹4,800\nUptime: 99.2%'},
+  {name:'Green Point Station',meta:'6 ports · AC · 22 kW',used:5,total:6,status:'Partial Fault',statusColor:'var(--orange)',info:'Green Point Station\nPorts: 6 (5 in use)\nType: AC · 22 kW\nFault: Port #3 offline\nRevenue today: ₹1,200'},
+  {name:'Tesla Supercharger',meta:'16 ports · SC · 250 kW',used:4,total:16,status:'Online',statusColor:'var(--green)',info:'Tesla Supercharger\nPorts: 16 (4 in use)\nType: Tesla SC · 250 kW\nRevenue today: ₹7,200\nUptime: 100%'},
+  {name:'Depot Charger A',meta:'8 ports · AC · 11 kW',used:8,total:8,status:'Full',statusColor:'var(--red)',info:'Depot Charger A\nPorts: 8 (8 in use — FULL)\nType: AC · 11 kW\nFleet vehicles only\nRevenue: Internal'},
+];
+function initStationsDetail(){
+  const grid=document.getElementById('stations-detail');
+  if(grid&&grid.children.length) return;
+  stationsDetail.forEach(s=>{
+    const pct=Math.round(s.used/s.total*100);
+    const barColor=pct>=100?'background:linear-gradient(90deg,var(--red),#ff0044)':
+      pct>=80?'background:linear-gradient(90deg,var(--orange),#ff6600)':
+      'background:linear-gradient(90deg,var(--blue),var(--green))';
+    const div=document.createElement('div');div.className='card';div.style.cursor='pointer';
+    div.innerHTML=`
+      <div class="st-name">${s.name}</div>
+      <div class="st-meta">${s.meta}</div>
+      <div class="st-bar-outer"><div class="st-bar-inner" style="width:${pct}%;${barColor}"></div></div>
+      <div class="st-footer">
+        <span>${s.used}/${s.total} in use</span>
+        <span style="color:${s.statusColor}">${s.status==='Online'?'● ':'⚠ '}${s.status}</span>
+      </div>
+      <button class="action-btn" style="width:100%;margin-top:.7rem;padding:.5rem" onclick="event.stopPropagation();showToast('🔧 Maintenance request sent for ${s.name}')">Request Maintenance</button>`;
+    div.onclick=()=>showModal(s.name,s.info);
+    grid.appendChild(div);
+  });
+}
+
+/* ── ANALYTICS TOP DRIVERS ── */
+function initTopDrivers(){
+  const el=document.getElementById('top-drivers');
+  if(el&&el.children.length) return;
+  const top=[
+    {name:'Lisa Park',eff:'5.1 km/kWh',dist:'312 km',score:96},
+    {name:'Priya Sharma',eff:'4.9 km/kWh',dist:'298 km',score:92},
+    {name:'Alex Driver',eff:'4.7 km/kWh',dist:'342 km',score:88},
+    {name:'Maria Chen',eff:'4.5 km/kWh',dist:'271 km',score:85},
+  ];
+  top.forEach((d,i)=>{
+    const div=document.createElement('div');
+    div.style.cssText='display:flex;align-items:center;gap:.7rem;padding:.4rem 0;border-bottom:1px solid rgba(0,212,255,.07);cursor:pointer;';
+    div.innerHTML=`
+      <span style="color:var(--muted);font-size:.72rem;width:1rem">#${i+1}</span>
+      <span style="font-size:1.2rem">${['🥇','🥈','🥉','🏅'][i]}</span>
+      <div style="flex:1"><div style="font-size:.83rem;font-weight:600">${d.name}</div><div style="font-size:.7rem;color:var(--muted)">${d.dist} · ${d.eff}</div></div>
+      <span style="color:var(--green);font-weight:700;font-size:.85rem">${d.score}</span>`;
+    div.onclick=()=>showModal(`Top Driver: ${d.name}`,`Rank: #${i+1}\nEfficiency: ${d.eff}\nDistance: ${d.dist}\nScore: ${d.score}/100`);
+    el.appendChild(div);
+  });
+}
+
+/* ── REPORT TABS ── */
+const reportData={
+  daily:  ['2,418 km','512 kWh','31','24','64%','4.7 km/kWh','↑ 8%','↑ 5%','↑ 3','↑ 2','↓ 4%','↑ 0.2'],
+  weekly: ['16,842 km','3,580 kWh','44','168','61%','4.5 km/kWh','↑ 12%','↑ 9%','↑ 5','↑ 14','↓ 2%','↑ 0.3'],
+  monthly:['71,200 km','15,040 kWh','48','712','67%','4.6 km/kWh','↑ 18%','↑ 15%','↑ 8','↑ 60','↑ 3%','↑ 0.5']
+};
+function switchTab(el,key){
+  document.querySelectorAll('.rtab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  const d=reportData[key];
+  ['r-dist','r-energy','r-drv','r-sess','r-batt','r-eff'].forEach((id,i)=>
+    document.getElementById(id).textContent=d[i]);
+  ['r-dist-d','r-energy-d','r-drv-d','r-sess-d','r-batt-d','r-eff-d'].forEach((id,i)=>{
+    const el2=document.getElementById(id);
+    el2.textContent=d[i+6];
+    el2.className='rdelta'+(d[i+6].startsWith('↓')?' neg':'');
+  });
+}
+
+/* ── NAVIGATION ── */
+function navigate(section){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('sec-'+section).classList.add('active');
+  document.querySelector(`[data-section="${section}"]`).classList.add('active');
+  if(window.innerWidth<=680) toggleSidebar();
+
+  // Lazy inits
+  if(section==='fleet') initFleetTable();
+  if(section==='drivers'){renderDriverTable(drivers,'drivers-tbody');}
+  if(section==='stations') initStationsDetail();
+  if(section==='analytics'){buildBarChart('analytics-chart',energyVals,'green');initTopDrivers();}
+  if(section==='alerts') renderAlerts('all-alerts');
+  if(section==='reports') buildBarChart('report-chart',energyVals);
+  if(section==='revenue') initRevenue();
+  if(section==='battery') initBatteryMonitor();
+  if(section==='vehicles') initVehiclePerf();
+  if(section==='charging-analytics') initChargingAnalytics();
+  if(section==='maintenance') initMaintenance();
+}
+
+/* ── SIDEBAR TOGGLE ── */
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('open');
+}
+
+/* ── SETTINGS ── */
+function saveAdminProfile(){
+  const name=document.getElementById('admin-name').value.trim();
+  if(name) document.getElementById('sb-admin-name').textContent=name;
+  showToast('✅ Admin profile saved!');
+}
+function prefToggle(el,label){showToast(`${el.checked?'✅':'🔕'} ${label} ${el.checked?'enabled':'disabled'}`);}
+
+/* ── MODAL ── */
+let modalActionFn=()=>{};
+function showModal(title,body,actionLabel,actionFn){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').innerHTML=body.replace(/\n/g,'<br>');
+  const btn=document.getElementById('modal-action-btn');
+  if(actionLabel&&actionFn){btn.style.display='block';btn.textContent=actionLabel;modalActionFn=actionFn;}
+  else{btn.style.display='none';}
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal(e){if(e.target===document.getElementById('modal'))closeModalDirect();}
+function closeModalDirect(){document.getElementById('modal').classList.remove('open');}
+
+/* ── TOAST ── */
+let toastTimer;
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast'+(type?' '+type:'')+' show';
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+/* ── LOGOUT ── */
+function logout(){
+  showToast('👋 Signing out…');
+  setTimeout(()=>{
+    document.body.style.transition='opacity .5s';
+    document.body.style.opacity='0';
+    setTimeout(()=>window.location.href='index.html',500);
+  },700);
+}
+
+/* ── REVENUE SECTION ── */
+const revDrivers=[
+  {id:'DRV00142',name:'Alex Driver',  vehicle:'Tesla Model 3',  trips:47,income:'₹25,521',charging:'₹356',net:'₹25,165',status:'active'},
+  {id:'DRV00137',name:'Maria Chen',   vehicle:'Nissan Leaf',    trips:41,income:'₹22,263',charging:'₹280',net:'₹21,983',status:'charging'},
+  {id:'DRV00129',name:'James Wilson', vehicle:'Hyundai Ioniq',  trips:38,income:'₹20,634',charging:'₹310',net:'₹20,324',status:'idle'},
+  {id:'DRV00118',name:'Priya Sharma', vehicle:'Tesla Model Y',  trips:52,income:'₹28,236',charging:'₹390',net:'₹27,846',status:'active'},
+  {id:'DRV00105',name:'Omar Hassan',  vehicle:'BYD Atto 3',     trips:29,income:'₹15,747',charging:'₹210',net:'₹15,537',status:'offline'},
+  {id:'DRV00098',name:'Lisa Park',    vehicle:'Tesla Model 3',  trips:55,income:'₹29,865',charging:'₹420',net:'₹29,445',status:'active'},
+];
+
+const dailyRevData=[
+  {day:'Mon',trip:'₹48,200',charge:'₹11,400',total:'₹59,600',drivers:28,trips:88},
+  {day:'Tue',trip:'₹54,100',charge:'₹13,200',total:'₹67,300',drivers:31,trips:102},
+  {day:'Wed',trip:'₹46,800',charge:'₹10,900',total:'₹57,700',drivers:27,trips:84},
+  {day:'Thu',trip:'₹62,400',charge:'₹16,000',total:'₹78,400',drivers:34,trips:118},
+  {day:'Fri',trip:'₹58,900',charge:'₹14,600',total:'₹73,500',drivers:33,trips:108},
+  {day:'Sat',trip:'₹38,200',charge:'₹9,800', total:'₹48,000',drivers:22,trips:68},
+  {day:'Sun',trip:'₹32,400',charge:'₹8,200', total:'₹40,600',drivers:18,trips:56},
+];
+
+let revDriversFiltered=[...revDrivers];
+
+function initRevenue(){
+  buildRevChart('monthly');
+  renderRevDrivers(revDrivers);
+  renderDailyRev();
+}
+
+function buildRevChart(mode){
+  const chartEl=document.getElementById('rev-chart');
+  if(!chartEl) return;
+  chartEl.innerHTML='';
+  const labelsEl=document.getElementById('rev-chart-labels');
+
+  let vals,labels;
+  if(mode==='monthly'){
+    vals=[312000,348000,295000,420000,458000,482600];
+    labels=['Jan','Feb','Mar','Apr','May','Jun'];
+  } else {
+    vals=[59600,67300,57700,78400,73500,48000,40600];
+    labels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  }
+  if(labelsEl) labelsEl.innerHTML=labels.map(l=>`<span>${l}</span>`).join('');
+
+  const max=Math.max(...vals);
+  vals.forEach((v,i)=>{
+    const col=document.createElement('div');col.className='bc-col';
+    const bar=document.createElement('div');bar.className='bc-bar';
+    bar.style.height=(v/max*100)+'%';
+    bar.style.background='linear-gradient(to top,var(--green),rgba(0,255,136,.25))';
+    bar.title=`${labels[i]}: ₹${v.toLocaleString()}`;
+    bar.onclick=()=>showModal(`${labels[i]} Revenue`,`Total: ₹${v.toLocaleString()}\nTrips: ~${Math.round(v*.8/543)}\nCharging: ₹${Math.round(v*.2).toLocaleString()}`);
+    col.appendChild(bar);chartEl.appendChild(col);
+  });
+}
+
+function switchRevTab(btn,mode){
+  document.querySelectorAll('#sec-revenue .rtab').forEach(b=>{
+    b.style.background='none';b.style.color='var(--muted)';b.style.borderColor='var(--border)';
+  });
+  btn.style.background='var(--green-dim)';btn.style.color='var(--green)';btn.style.borderColor='var(--green)';
+  buildRevChart(mode);
+}
+
+function renderRevDrivers(data){
+  const tb=document.getElementById('rev-driver-tbody');
+  if(!tb) return;
+  tb.innerHTML='';
+  data.forEach((d,i)=>{
+    const tr=document.createElement('tr');tr.style.cursor='pointer';
+    tr.innerHTML=`
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted);font-weight:700">${i+1}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);" class="td-id">${d.id}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);font-weight:600">${d.name}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted);font-size:.76rem">${d.vehicle}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--blue);font-weight:600">${d.trips}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--green);font-weight:700">${d.income}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--red)">${d.charging}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--blue);font-weight:800">${d.net}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">
+        <span class="status-badge ${d.status}"><span class="dot"></span>${d.status.charAt(0).toUpperCase()+d.status.slice(1)}</span>
+      </td>`;
+    tr.onmouseenter=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='rgba(0,255,136,.04)');
+    tr.onmouseleave=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='');
+    tr.onclick=()=>showModal(`Revenue: ${d.name}`,
+      `Driver ID: ${d.id}\nVehicle: ${d.vehicle}\nTrips This Month: ${d.trips}\nGross Trip Income: ${d.income}\nCharging Deducted: ${d.charging}\nNet Earnings: ${d.net}\nStatus: ${d.status.toUpperCase()}`);
+    tb.appendChild(tr);
+  });
+}
+
+function filterRevDrivers(q){
+  const f=revDrivers.filter(d=>
+    d.name.toLowerCase().includes(q.toLowerCase())||
+    d.id.toLowerCase().includes(q.toLowerCase())
+  );
+  renderRevDrivers(f);
+}
+
+function renderDailyRev(){
+  const tb=document.getElementById('daily-rev-tbody');
+  if(!tb||tb.children.length) return;
+  dailyRevData.forEach(d=>{
+    const tr=document.createElement('tr');tr.style.cursor='pointer';
+    tr.innerHTML=`
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);font-weight:600">${d.day}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--blue)">${d.trip}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--orange)">${d.charge}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--green);font-weight:800">${d.total}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted)">${d.drivers}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted)">${d.trips}</td>`;
+    tr.onmouseenter=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='rgba(0,255,136,.04)');
+    tr.onmouseleave=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='');
+    tr.onclick=()=>showModal(`${d.day} Revenue`,`Trip Revenue: ${d.trip}\nCharging Revenue: ${d.charge}\nTotal: ${d.total}\nDrivers Active: ${d.drivers}\nTotal Trips: ${d.trips}`);
+    tb.appendChild(tr);
+  });
+}
+
+/* ── BATTERY MONITOR DATA ── */
+const battData=[
+  {id:'EV-4021',driver:'Alex Driver', brand:'Tesla',  pct:78, soh:94, cap:52,  status:'active'},
+  {id:'EV-3818',driver:'Maria Chen',  brand:'Nissan', pct:45, soh:88, cap:40,  status:'charging'},
+  {id:'EV-3017',driver:'James Wilson',brand:'Hyundai',pct:62, soh:91, cap:38.3,status:'idle'},
+  {id:'EV-4102',driver:'Priya Sharma',brand:'Tesla',  pct:88, soh:97, cap:75,  status:'active'},
+  {id:'EV-2940',driver:'Omar Hassan', brand:'BYD',    pct:8,  soh:82, cap:60,  status:'offline'},
+  {id:'EV-4301',driver:'Lisa Park',   brand:'Tesla',  pct:91, soh:98, cap:52,  status:'active'},
+  {id:'EV-3011',driver:'Sam Lee',     brand:'Kia',    pct:15, soh:85, cap:77.4,status:'idle'},
+  {id:'EV-3044',driver:'Nina Ray',    brand:'BMW',    pct:12, soh:80, cap:80,  status:'idle'},
+];
+
+function initBatteryMonitor(){
+  renderBattTable(battData);
+}
+function renderBattTable(data){
+  const tb=document.getElementById('batt-tbody');
+  if(!tb) return; tb.innerHTML='';
+  data.forEach(v=>{
+    const low=v.pct<20;
+    const color=v.pct<20?'var(--red)':v.pct<50?'var(--orange)':'var(--green)';
+    const tr=document.createElement('tr');tr.style.cursor='pointer';
+    if(low) tr.style.background='rgba(255,77,109,.04)';
+    tr.innerHTML=`
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);" class="td-id">${v.id}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">${v.driver}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted)">${v.brand}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);min-width:140px;">
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <div style="flex:1;background:rgba(255,255,255,.06);border-radius:2rem;height:.4rem;">
+            <div style="width:${v.pct}%;height:100%;border-radius:2rem;background:${color};"></div>
+          </div>
+          <span style="color:${color};font-weight:700;font-size:.78rem;width:2.5rem">${v.pct}%</span>
+        </div>
+      </td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <div style="flex:1;background:rgba(255,255,255,.06);border-radius:2rem;height:.4rem;">
+            <div style="width:${v.soh}%;height:100%;border-radius:2rem;background:var(--blue);"></div>
+          </div>
+          <span style="color:var(--blue);font-weight:700;font-size:.78rem;width:2.5rem">${v.soh}%</span>
+        </div>
+      </td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted)">${v.cap} kWh</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">
+        <span class="status-badge ${v.status}"><span class="dot"></span>${v.status.charAt(0).toUpperCase()+v.status.slice(1)}</span>
+      </td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">
+        ${low?'<span style="color:var(--red);font-weight:700;font-size:.75rem;">⚠️ CRITICAL</span>':
+          v.pct<50?'<span style="color:var(--orange);font-size:.75rem;">⚡ Low</span>':
+          '<span style="color:var(--green);font-size:.75rem;">✅ OK</span>'}
+      </td>`;
+    tr.onmouseenter=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='rgba(0,212,255,.04)');
+    tr.onmouseleave=()=>tr.querySelectorAll('td').forEach(td=>td.style.background=low?'rgba(255,77,109,.04)':'');
+    tr.onclick=()=>showModal(`Battery: ${v.id}`,`Driver: ${v.driver}\nBrand: ${v.brand}\nBattery: ${v.pct}%\nHealth (SOH): ${v.soh}%\nCapacity: ${v.cap} kWh\nStatus: ${v.status.toUpperCase()}\n${low?'⚠️ CRITICAL — charge immediately!':v.pct<50?'⚡ Low — charge soon':'✅ Battery OK'}`);
+    tb.appendChild(tr);
+  });
+}
+function filterBattTable(q){
+  renderBattTable(battData.filter(v=>
+    v.id.toLowerCase().includes(q.toLowerCase())||
+    v.driver.toLowerCase().includes(q.toLowerCase())||
+    v.brand.toLowerCase().includes(q.toLowerCase())
+  ));
+}
+
+/* ── VEHICLE PERFORMANCE DATA ── */
+const vehPerfData=[
+  {id:'EV-4021',driver:'Alex Driver', brand:'Tesla Model 3', speed:'54 km/h', cityHwy:'City', motor:'245 kW RWD', engKwh:52,   weight:1844, overspeed:false, status:'active'},
+  {id:'EV-3818',driver:'Maria Chen',  brand:'Nissan Leaf',   speed:'0 km/h',  cityHwy:'—',    motor:'150 kW FWD', engKwh:40,   weight:1550, overspeed:false, status:'charging'},
+  {id:'EV-3017',driver:'James Wilson',brand:'Hyundai Ioniq', speed:'0 km/h',  cityHwy:'—',    motor:'160 kW FWD', engKwh:38.3, weight:1750, overspeed:false, status:'idle'},
+  {id:'EV-4102',driver:'Priya Sharma',brand:'Tesla Model Y', speed:'72 km/h', cityHwy:'Highway','motor':'220 kW AWD',engKwh:75, weight:2003, overspeed:false, status:'active'},
+  {id:'EV-2940',driver:'Omar Hassan', brand:'BYD Atto 3',    speed:'0 km/h',  cityHwy:'—',    motor:'150 kW FWD', engKwh:60,   weight:1750, overspeed:false, status:'offline'},
+  {id:'EV-4301',driver:'Lisa Park',   brand:'Tesla Model 3', speed:'61 km/h', cityHwy:'City', motor:'245 kW RWD', engKwh:52,   weight:1844, overspeed:false, status:'active'},
+  {id:'EV-3055',driver:'Tom Baker',   brand:'BMW iX3',       speed:'95 km/h', cityHwy:'Highway','motor':'210 kW RWD',engKwh:80, weight:2185, overspeed:true,  status:'active'},
+  {id:'EV-3090',driver:'Sara Khan',   brand:'Kia EV6',       speed:'44 km/h', cityHwy:'City', motor:'225 kW AWD', engKwh:77.4, weight:2015, overspeed:false, status:'active'},
+];
+
+function initVehiclePerf(){
+  renderVehTable(vehPerfData);
+}
+function renderVehTable(data){
+  const tb=document.getElementById('veh-perf-tbody');
+  if(!tb) return; tb.innerHTML='';
+  data.forEach(v=>{
+    const tr=document.createElement('tr');tr.style.cursor='pointer';
+    if(v.overspeed) tr.style.background='rgba(255,77,109,.05)';
+    tr.innerHTML=`
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);" class="td-id">${v.id}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">${v.driver}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted)">${v.brand}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:${v.overspeed?'var(--red)':'var(--blue)'};font-weight:700">${v.speed}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted)">${v.cityHwy}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);font-size:.76rem">${v.motor}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--orange)">${v.engKwh} kWh</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted)">${v.weight} kg</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">
+        ${v.overspeed?'<span style="color:var(--red);font-weight:700">⚠️ YES</span>':'<span style="color:var(--green)">✅ No</span>'}
+      </td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">
+        <span class="status-badge ${v.status}"><span class="dot"></span>${v.status.charAt(0).toUpperCase()+v.status.slice(1)}</span>
+      </td>`;
+    tr.onmouseenter=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='rgba(0,212,255,.04)');
+    tr.onmouseleave=()=>tr.querySelectorAll('td').forEach(td=>td.style.background=v.overspeed?'rgba(255,77,109,.05)':'');
+    tr.onclick=()=>showModal(`Vehicle ${v.id}${v.overspeed?' ⚠️':''}`,
+      `Driver: ${v.driver}\nBrand: ${v.brand}\nSpeed: ${v.speed}\nRoute: ${v.cityHwy}\nMotor: ${v.motor}\nEngine: ${v.engKwh} kWh\nWeight: ${v.weight} kg\nOverspeed: ${v.overspeed?'⚠️ YES — violation logged':'✅ None'}\nStatus: ${v.status.toUpperCase()}`);
+    tb.appendChild(tr);
+  });
+}
+function filterVehTable(q){
+  renderVehTable(vehPerfData.filter(v=>
+    v.id.toLowerCase().includes(q.toLowerCase())||
+    v.driver.toLowerCase().includes(q.toLowerCase())||
+    v.brand.toLowerCase().includes(q.toLowerCase())
+  ));
+}
+
+/* ── CHARGING ANALYTICS DATA ── */
+const chargeLog=[
+  {time:'08:10',vid:'EV-4021',driver:'Alex Driver', station:'EV Hub Central',     kwh:52,   cost:'₹780', dur:'2h 10m',status:'completed'},
+  {time:'09:30',vid:'EV-3818',driver:'Maria Chen',  station:'Green Point',         kwh:20,   cost:'₹200', dur:'55 min',status:'completed'},
+  {time:'11:15',vid:'EV-3090',driver:'Sara Khan',   station:'Tesla Supercharger',  kwh:38,   cost:'₹684', dur:'22 min',status:'completed'},
+  {time:'13:00',vid:'EV-4102',driver:'Priya Sharma',station:'Depot Charger A',     kwh:30,   cost:'₹240', dur:'1h 20m',status:'active'},
+  {time:'14:45',vid:'EV-3055',driver:'Tom Baker',   station:'Tesla Supercharger',  kwh:55,   cost:'₹990', dur:'25 min',status:'completed'},
+  {time:'15:30',vid:'EV-2940',driver:'Omar Hassan', station:'EV Hub Central',      kwh:48,   cost:'₹720', dur:'1h 55m',status:'active'},
+];
+function initChargingAnalytics(){
+  buildBarChart('charge-cost-chart',[9800,11200,8700,14400,13100,7200,6480],'orange');
+  renderChargeStatus();
+  renderChargeLog();
+}
+function renderChargeStatus(){
+  const el=document.getElementById('charge-status-list');
+  if(!el||el.children.length) return;
+  const stations=[
+    {name:'EV Hub Central',    used:8, total:12,pct:67, color:'var(--green)', st:'Online'},
+    {name:'Green Point Station',used:5,total:6, pct:83, color:'var(--orange)','st':'Partial'},
+    {name:'Tesla Supercharger', used:4,total:16,pct:25, color:'var(--green)', st:'Online'},
+    {name:'Depot Charger A',    used:8,total:8, pct:100,color:'var(--red)',   st:'Full'},
+  ];
+  stations.forEach(s=>{
+    const div=document.createElement('div');
+    div.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem;">
+        <span style="font-size:.82rem;font-weight:600">${s.name}</span>
+        <span style="font-size:.72rem;color:${s.color};font-weight:700">${s.used}/${s.total} · ${s.st}</span>
+      </div>
+      <div style="background:rgba(255,255,255,.06);border-radius:2rem;height:.4rem;">
+        <div style="width:${s.pct}%;height:100%;border-radius:2rem;background:${s.color};"></div>
+      </div>`;
+    el.appendChild(div);
+  });
+}
+function renderChargeLog(){
+  const tb=document.getElementById('charge-log-tbody');
+  if(!tb||tb.children.length) return;
+  chargeLog.forEach(c=>{
+    const active=c.status==='active';
+    const tr=document.createElement('tr');tr.style.cursor='pointer';
+    if(active) tr.style.background='rgba(0,212,255,.04)';
+    tr.innerHTML=`
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted)">${c.time}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);" class="td-id">${c.vid}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">${c.driver}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted);font-size:.76rem">${c.station}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--orange);font-weight:600">${c.kwh} kWh</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--green);font-weight:700">${c.cost}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted)">${c.dur}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">
+        <span class="status-badge ${active?'charging':'active'}"><span class="dot"></span>${active?'Charging':'Done'}</span>
+      </td>`;
+    tr.onmouseenter=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='rgba(0,212,255,.04)');
+    tr.onmouseleave=()=>tr.querySelectorAll('td').forEach(td=>td.style.background=active?'rgba(0,212,255,.04)':'');
+    tr.onclick=()=>showModal(`Charging: ${c.vid}`,`Driver: ${c.driver}\nStation: ${c.station}\nEnergy: ${c.kwh} kWh\nCost: ${c.cost}\nDuration: ${c.dur}\nStatus: ${c.status.toUpperCase()}`);
+    tb.appendChild(tr);
+  });
+}
+
+/* ── MAINTENANCE DATA ── */
+const maintData=[
+  {id:'EV-2940',driver:'Omar Hassan', type:'Battery Replacement',due:'Jun 10',breakdown:'Yes',overspeed:false, priority:'critical'},
+  {id:'EV-3017',driver:'James Wilson',type:'Service Overdue',    due:'Jun 8', breakdown:'No', overspeed:false, priority:'critical'},
+  {id:'EV-3044',driver:'Nina Ray',    type:'Tyre Rotation',      due:'Jun 12',breakdown:'No', overspeed:false, priority:'critical'},
+  {id:'EV-3055',driver:'Tom Baker',   type:'Overspeed Review',   due:'Jun 9', breakdown:'No', overspeed:true,  priority:'warning'},
+  {id:'EV-3011',driver:'Sam Lee',     type:'Battery Check',      due:'Jun 14',breakdown:'No', overspeed:false, priority:'warning'},
+  {id:'EV-4102',driver:'Priya Sharma',type:'Coolant Check',      due:'Jun 15',breakdown:'No', overspeed:false, priority:'warning'},
+  {id:'EV-3818',driver:'Maria Chen',  type:'Brake Inspection',   due:'Jun 20',breakdown:'No', overspeed:false, priority:'scheduled'},
+  {id:'EV-4021',driver:'Alex Driver', type:'Annual Service',     due:'Jun 26',breakdown:'No', overspeed:false, priority:'scheduled'},
+];
+
+let maintAlerts=[
+  {type:'crit', icon:'🪫', title:'Critical Battery — EV-2940',  sub:'BYD Atto 3 · 8% · Omar Hassan · Replace battery urgently'},
+  {type:'crit', icon:'🔧', title:'Service Overdue — EV-3017',   sub:'Hyundai Ioniq · 420 km overdue · James Wilson'},
+  {type:'crit', icon:'🔩', title:'Tyre Wear — EV-3044',         sub:'BMW iX3 · Tyre rotation overdue · Nina Ray'},
+  {type:'warn', icon:'⚠️', title:'Overspeed Violation — EV-3055',sub:'BMW iX3 · 95 km/h in 80 zone · Tom Baker'},
+  {type:'warn', icon:'🔋', title:'Low Battery — EV-3011',        sub:'Kia EV6 · 15% · Sam Lee · Charge before next trip'},
+];
+
+function initMaintenance(){
+  renderMaintAlerts();
+  renderMaintTable();
+}
+function renderMaintAlerts(){
+  const el=document.getElementById('maint-alerts-list');
+  if(!el) return; el.innerHTML='';
+  if(!maintAlerts.length){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.85rem;">✅ No active alerts</div>';
+    return;
+  }
+  maintAlerts.forEach((a,i)=>{
+    const borderMap={crit:'rgba(255,77,109,.25)',warn:'rgba(255,170,0,.25)',info:'rgba(0,212,255,.2)'};
+    const bgMap={crit:'rgba(255,77,109,.06)',warn:'rgba(255,170,0,.06)',info:'rgba(0,212,255,.05)'};
+    const div=document.createElement('div');
+    div.style.cssText=`display:flex;align-items:flex-start;gap:.7rem;border-radius:.65rem;padding:.65rem .85rem;
+      background:${bgMap[a.type]||bgMap.info};border:1px solid ${borderMap[a.type]||borderMap.info};`;
+    div.innerHTML=`
+      <span style="font-size:1.1rem;flex-shrink:0;margin-top:1px">${a.icon}</span>
+      <div style="flex:1"><div style="font-size:.82rem;font-weight:600">${a.title}</div>
+      <div style="font-size:.72rem;color:var(--muted);margin-top:.1rem">${a.sub}</div></div>
+      <button onclick="dismissMaint(${i})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:.85rem;padding:0;" title="Dismiss">✕</button>`;
+    el.appendChild(div);
+  });
+  document.getElementById('maint-alert-count').textContent=maintAlerts.filter(a=>a.type==='crit').length+' Critical';
+}
+function dismissMaint(i){
+  maintAlerts.splice(i,1);
+  renderMaintAlerts();
+  showToast('🗑️ Alert dismissed');
+}
+function dismissAllMaint(){
+  maintAlerts=[];renderMaintAlerts();showToast('✅ All maintenance alerts cleared!');
+}
+function renderMaintTable(){
+  const tb=document.getElementById('maint-tbody');
+  if(!tb||tb.children.length) return;
+  const prioMap={critical:'var(--red)',warning:'var(--orange)',scheduled:'var(--blue)'};
+  maintData.forEach(m=>{
+    const tr=document.createElement('tr');tr.style.cursor='pointer';
+    if(m.priority==='critical') tr.style.background='rgba(255,77,109,.04)';
+    tr.innerHTML=`
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);" class="td-id">${m.id}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">${m.driver}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:var(--muted);font-size:.76rem">${m.type}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);color:${m.priority==='critical'?'var(--red)':'var(--muted)'};font-weight:600">${m.due}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">${m.breakdown==='Yes'?'<span style="color:var(--red);font-weight:700">🔴 Yes</span>':'<span style="color:var(--green)">✅ No</span>'}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">${m.overspeed?'<span style="color:var(--red);font-weight:700">⚠️ Yes</span>':'<span style="color:var(--green)">✅ No</span>'}</td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">
+        <span style="color:${prioMap[m.priority]};font-weight:700;font-size:.75rem;text-transform:uppercase">${m.priority}</span>
+      </td>
+      <td style="padding:.55rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);">
+        <button class="action-btn" onclick="event.stopPropagation();showToast('📋 Work order created for ${m.id}')">Assign</button>
+      </td>`;
+    tr.onmouseenter=()=>tr.querySelectorAll('td').forEach(td=>td.style.background='rgba(0,212,255,.04)');
+    tr.onmouseleave=()=>tr.querySelectorAll('td').forEach(td=>td.style.background=m.priority==='critical'?'rgba(255,77,109,.04)':'');
+    tr.onclick=()=>showModal(`Maintenance: ${m.id}`,`Driver: ${m.driver}\nType: ${m.type}\nDue: ${m.due}\nBreakdown: ${m.breakdown}\nOverspeed: ${m.overspeed?'Yes — violation':'No'}\nPriority: ${m.priority.toUpperCase()}`);
+    tb.appendChild(tr);
+  });
+}
+
+/* ── INIT ON LOAD ── */
+/* ── PROFESSIONAL PDF EXPORT ── */
+function exportProfessionalReport(sectionIds, filename='report.pdf'){
+  if(!Array.isArray(sectionIds)) sectionIds=[sectionIds];
+  showToast('Preparing professional PDF…');
+  const spinner = document.getElementById('pdf-spinner'); if(spinner) spinner.style.display='flex';
+  // build printable wrapper matching provided template
+  const wrapper=document.createElement('div');
+  wrapper.style.width='800px'; wrapper.style.margin='0 auto'; wrapper.style.background='#ffffff'; wrapper.style.color='#222'; wrapper.style.padding='28px 34px'; wrapper.style.fontFamily='Helvetica, Arial, sans-serif'; wrapper.style.lineHeight='1.4';
+
+  // Banner strip (top small logo area)
+  const topbar=document.createElement('div'); topbar.style.display='flex'; topbar.style.alignItems='center'; topbar.style.justifyContent='space-between'; topbar.style.marginBottom='10px';
+  const logoBox=document.createElement('div'); logoBox.innerHTML=`<div style="width:44px;height:44px;border-radius:6px;background:#e6f2ee;display:flex;align-items:center;justify-content:center;font-weight:700;color:#006a4e">T.</div>`;
+  const contact=document.createElement('div'); contact.style.fontSize='11px'; contact.style.color='#2d6b60'; contact.textContent='Devon Rd, Hempstead, NY | yourinfo@emailaddress.com | WWW.TEMPLATE.NET | 222 555 7777';
+  topbar.appendChild(logoBox); topbar.appendChild(contact); wrapper.appendChild(topbar);
+
+  // Title area
+  const title=document.createElement('div'); title.style.textAlign='center'; title.style.margin='12px 0 18px 0';
+  title.innerHTML=`<h1 style="margin:0;font-size:20px;color:#111">Printable Summary Report</h1><div style="font-size:12px;color:#666;margin-top:8px">Prepared by: Admin · Company: EV Fleet Analysis · Date: ${new Date().toLocaleDateString()}</div>`;
+  wrapper.appendChild(title);
+
+  // Introduction section
+  const intro=document.createElement('div'); intro.style.marginTop='12px';
+  intro.innerHTML=`<h3 style="font-size:14px;margin-bottom:6px">I. Introduction</h3><div style="font-size:12px;color:#333">This report provides a concise summary of fleet performance, charging activity and revenue trends for the selected period. It is intended for operational review and decision making.</div>`;
+  wrapper.appendChild(intro);
+
+  // Executive Summary cards
+  const summaryTitle=document.createElement('h3'); summaryTitle.style.fontSize='14px'; summaryTitle.style.marginTop='12px'; summaryTitle.textContent='II. Executive Summary'; wrapper.appendChild(summaryTitle);
+  const sumRow=document.createElement('div'); sumRow.style.display='flex'; sumRow.style.gap='12px'; sumRow.style.marginTop='8px';
+  const keys=['r-dist','r-energy','r-drv','r-sess','r-batt','r-eff'];
+  keys.forEach(k=>{ const el=document.getElementById(k);
+    const card=document.createElement('div'); card.style.flex='1'; card.style.border='1px solid #eef3f0'; card.style.padding='10px'; card.style.borderRadius='6px';
+    if(el){ const label = el.previousElementSibling?el.previousElementSibling.textContent: k; card.innerHTML=`<div style="font-size:11px;color:#666">${label}</div><div style="font-size:18px;font-weight:700;color:#0b2b24;margin-top:6px">${el.textContent}</div>`;} else { card.innerHTML=`<div style="font-size:11px;color:#666">${k}</div><div style="font-size:14px;color:#111;margin-top:6px">N/A</div>` }
+    sumRow.appendChild(card);
+  }); wrapper.appendChild(sumRow);
+
+  // Insert the selected sections (cloned and cleaned)
+  sectionIds.forEach(sid=>{ const sec=document.getElementById(sid); if(!sec) return; const clone=sec.cloneNode(true);
+    clone.querySelectorAll('button,input,select,textarea').forEach(n=>n.remove());
+    // collapse interactive areas and set styles for print
+    clone.style.background='transparent'; clone.style.color='#111'; clone.style.marginTop='18px';
+    // small title adjustment if section has .card-title
+    clone.querySelectorAll('.card-title').forEach(t=>{ t.style.color='#0b2b24'; t.style.fontSize='13px'; });
+    wrapper.appendChild(clone);
+  });
+
+  // Footer note
+  const ftr=document.createElement('div'); ftr.style.marginTop='18px'; ftr.style.fontSize='11px'; ftr.style.color='#666'; ftr.textContent='Report generated by EV Fleet Analysis · Confidential'; wrapper.appendChild(ftr);
+
+  // offscreen attach for rendering
+  wrapper.style.position='fixed'; wrapper.style.left='-20000px'; document.body.appendChild(wrapper);
+  const opt={scale:2,useCORS:true,backgroundColor:'#ffffff'};
+  html2canvas(wrapper,opt).then(canvas=>{
+    try{
+      const imgData = canvas.toDataURL('image/png');
+      const { jsPDF } = window.jspdf || (window.jspdf={});
+      const pdf = new jsPDF('p','pt','a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgRatio = canvas.width / canvas.height;
+      const imgW = pdfWidth - 40; // left/right margin in pts
+      const imgH = imgW / imgRatio;
+      const totalPages = Math.ceil(imgH / (pdfHeight - 60));
+      let position = 20; // top margin
+      // add pages with header/footer
+      for(let i=0;i<totalPages;i++){
+        if(i>0) pdf.addPage();
+        const y = position - i*(pdfHeight - 60);
+        pdf.addImage(imgData,'PNG',20,y,imgW,imgH);
+        // page header (small line)
+        pdf.setDrawColor(220); pdf.setLineWidth(0.5); pdf.line(20,18,pdfWidth-20,18);
+        // page footer with numbering
+        const pageNum = i+1; pdf.setFontSize(10); pdf.setTextColor(120); pdf.text(`${pageNum} / ${totalPages}`, pdfWidth - 60, pdfHeight - 20);
+      }
+      pdf.save(filename);
+      showToast('📥 Professional PDF exported!');
+    }catch(err){ console.error(err); showToast('❌ PDF export failed','red'); }
+  }).catch(err=>{ console.error(err); showToast('❌ PDF export failed','red'); })
+  .finally(()=>{ wrapper.remove(); if(spinner) spinner.style.display='none'; });
+}
+
+function exportSectionToPDF(sectionId, filename='report.pdf'){ exportProfessionalReport([sectionId], filename); }
+
+buildBarChart('energy-chart',energyVals);
+buildTrendLine();
+renderDriverTable(drivers.slice(0,5),'dash-driver-table');
+renderAlerts('dash-alerts');
+
+// Fix dash driver table — build thead/tbody properly
+(function(){
+  const t=document.getElementById('dash-driver-table');
+  if(!t) return;
+  let tb=t.querySelector('tbody');
+  if(!tb){tb=document.createElement('tbody');tb.id='dash-driver-table-tbody';t.appendChild(tb);}
+  else{tb.id='dash-driver-table-tbody';}
+  renderDriverTable(drivers.slice(0,5),'dash-driver-table-tbody');
+})();
+
+/* ── LIVE STAT SIMULATION ── */
+setInterval(()=>{
+  const delta=Math.random()>.5?1:-1;
+  const cur=parseInt(document.getElementById('stat-active').textContent)||31;
+  const next=Math.max(28,Math.min(34,cur+delta));
+  document.getElementById('stat-active').textContent=next;
+},12000);
+</script>
+</body>
+</html>

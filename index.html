@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Electric Vehicle Analysis System</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-dark:       #0d1117;
+      --navy:          #161b22;
+      --accent:        #2f81f7;
+      --accent2:       #3fb950;
+      --accent-dim:    rgba(47,129,247,0.12);
+      --accent2-dim:   rgba(63,185,80,0.12);
+      --glass-bg:      rgba(22,27,34,0.92);
+      --glass-border:  rgba(48,54,61,0.95);
+      --text-primary:  #e6edf3;
+      --text-muted:    #7d8590;
+      --error:         #f85149;
+      --success:       #3fb950;
+      /* keep alias names for JS compatibility */
+      --neon-blue:     #2f81f7;
+      --neon-green:    #3fb950;
+      --neon-blue-dim: rgba(47,129,247,0.12);
+      --neon-green-dim:rgba(63,185,80,0.12);
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      overflow-x: hidden;
+    }
+
+    /* ── CANVAS BACKGROUND ── */
+    #bg-canvas { position:fixed;inset:0;z-index:0;pointer-events:none; }
+
+    /* ── LAYOUT ── */
+    .page {
+      position: relative; z-index: 1;
+      min-height: 100vh; display: flex;
+      flex-direction: column; align-items: center;
+      justify-content: center; padding: 2rem 1rem;
+    }
+
+    /* ── HEADER ── */
+    .header { text-align:center; margin-bottom:2.5rem; animation:fadeDown 0.7s ease both; }
+
+    .header .ev-badge {
+      display: inline-flex; align-items: center; gap:.5rem;
+      background: var(--accent-dim); border: 1px solid rgba(47,129,247,.35);
+      border-radius: 0.4rem; padding: 0.28rem 0.9rem;
+      font-size: 0.72rem; letter-spacing: 0.1em;
+      color: var(--accent); text-transform: uppercase; margin-bottom: 1rem;
+      font-weight: 600;
+    }
+
+    .header h1 {
+      font-size: clamp(1.55rem, 4vw, 2.4rem); font-weight: 700;
+      letter-spacing: 0.01em; color: var(--text-primary); line-height: 1.2;
+    }
+    .header h1 span { color: var(--accent); }
+
+    .header p { margin-top:.5rem; color:var(--text-muted); font-size:clamp(.82rem,2vw,.95rem); }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 0.75rem;
+      padding: 2.2rem 1.8rem;
+      width: 100%; max-width: 460px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 32px rgba(0,0,0,.5);
+      animation: fadeUp 0.7s ease both;
+    }
+
+    /* ── PORTAL SELECTION ── */
+    #portal-screen { display:block; }
+    #login-screen  { display:none; }
+
+    .portal-label {
+      text-align:center; font-size:.78rem; color:var(--text-muted);
+      letter-spacing:.09em; text-transform:uppercase; margin-bottom:1.4rem; font-weight:600;
+    }
+
+    .portal-btns { display:grid; grid-template-columns:1fr 1fr; gap:.85rem; }
+
+    .portal-btn {
+      position:relative; overflow:hidden;
+      background:rgba(47,129,247,.05);
+      border: 1px solid var(--glass-border);
+      border-radius: 0.6rem; padding:1.5rem 1rem;
+      cursor:pointer; display:flex; flex-direction:column;
+      align-items:center; gap:.6rem;
+      transition:border-color .2s, box-shadow .2s, background .2s, transform .15s;
+      color:var(--text-primary); font-family:inherit;
+    }
+    .portal-btn:hover {
+      border-color: var(--accent);
+      background: rgba(47,129,247,.09);
+      box-shadow: 0 0 0 1px var(--accent), 0 4px 16px rgba(47,129,247,.2);
+      transform: translateY(-2px);
+    }
+    .portal-btn.green:hover {
+      border-color: var(--accent2);
+      background: rgba(63,185,80,.09);
+      box-shadow: 0 0 0 1px var(--accent2), 0 4px 16px rgba(63,185,80,.2);
+    }
+    .portal-btn .icon  { font-size:2rem; }
+    .portal-btn .label { font-size:.88rem; font-weight:600; }
+    .portal-btn .sub   { font-size:.7rem; color:var(--text-muted); }
+
+    .portal-btn::after {
+      content:''; position:absolute; inset:0; border-radius:inherit;
+      border:1.5px solid transparent; transition:all .35s; pointer-events:none;
+    }
+    .portal-btn:hover::after      { border-color:var(--accent); animation:pulseRing 1.1s ease-out infinite; }
+    .portal-btn.green:hover::after{ border-color:var(--accent2); }
+
+    @keyframes pulseRing {
+      0%  { transform:scale(1);    opacity:.7; }
+      100%{ transform:scale(1.05); opacity:0;  }
+    }
+
+    /* ── LOGIN FORM ── */
+    .form-header { display:flex; align-items:center; gap:.75rem; margin-bottom:1.6rem; }
+
+    .back-btn {
+      background:none; border:1px solid var(--glass-border);
+      border-radius:.4rem; width:2rem; height:2rem;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; color:var(--text-muted); font-size:.95rem;
+      transition:border-color .2s, color .2s; flex-shrink:0;
+    }
+    .back-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+    .form-title       { font-size:1rem; font-weight:600; }
+    .form-title span  { color:var(--accent); }
+    .form-title.green span { color:var(--accent2); }
+
+    /* ── FIELD ── */
+    .field { margin-bottom:1rem; }
+    .field label {
+      display:block; font-size:.73rem; color:var(--text-muted);
+      letter-spacing:.07em; text-transform:uppercase; margin-bottom:.35rem; font-weight:500;
+    }
+    .input-wrap { position:relative; display:flex; align-items:center; }
+    .input-wrap .icon-left {
+      position:absolute; left:.8rem; color:var(--text-muted);
+      font-size:.88rem; pointer-events:none;
+    }
+    .field input {
+      width:100%; background:rgba(22,27,34,.95);
+      border:1px solid var(--glass-border);
+      border-radius:.45rem; padding:.7rem 2.6rem .7rem 2.4rem;
+      color:var(--text-primary); font-size:.9rem; outline:none;
+      transition:border-color .2s, box-shadow .2s; font-family:inherit;
+    }
+    .field input::placeholder { color:#4d5460; }
+    .field input:focus {
+      border-color:var(--accent);
+      box-shadow: 0 0 0 3px rgba(47,129,247,.15);
+    }
+    .field input.valid {
+      border-color:var(--accent2);
+      box-shadow: 0 0 0 3px rgba(63,185,80,.12);
+    }
+    .field input.invalid {
+      border-color:var(--error);
+      box-shadow: 0 0 0 3px rgba(248,81,73,.12);
+      animation:shake .32s ease;
+    }
+    .field .err-msg { font-size:.7rem; color:var(--error); margin-top:.28rem; display:none; }
+    .field .err-msg.show { display:block; }
+
+    @keyframes shake {
+      0%,100%{ transform:translateX(0); }
+      25%    { transform:translateX(-4px); }
+      75%    { transform:translateX(4px); }
+    }
+
+    .toggle-pw {
+      position:absolute; right:.8rem; background:none; border:none;
+      cursor:pointer; color:var(--text-muted); font-size:.88rem;
+      transition:color .2s; padding:0;
+    }
+    .toggle-pw:hover { color:var(--accent); }
+
+    /* ── EXTRAS ── */
+    .extras {
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:1.3rem; font-size:.78rem;
+    }
+    .remember { display:flex; align-items:center; gap:.4rem; cursor:pointer; color:var(--text-muted); user-select:none; }
+    .remember input[type="checkbox"] {
+      appearance:none; width:.9rem; height:.9rem;
+      border:1px solid rgba(125,133,144,.5); border-radius:.2rem;
+      background:transparent; cursor:pointer; position:relative;
+      transition:border-color .2s, background .2s; flex-shrink:0;
+    }
+    .remember input[type="checkbox"]:checked { background:var(--accent); border-color:var(--accent); }
+    .remember input[type="checkbox"]:checked::after {
+      content:'✓'; position:absolute; top:-1px; left:1px; font-size:.6rem; color:#fff;
+    }
+    .forgot { color:var(--accent); text-decoration:none; transition:opacity .2s; }
+    .forgot:hover { opacity:.75; }
+
+    /* ── LOGIN BUTTON ── */
+    .login-btn {
+      width:100%; padding:.78rem; border:none; border-radius:.45rem;
+      background: var(--accent); color:#fff;
+      font-size:.9rem; font-weight:600; letter-spacing:.04em;
+      cursor:pointer; position:relative; overflow:hidden;
+      transition:background .2s, box-shadow .2s, transform .15s, opacity .2s;
+      font-family:inherit;
+    }
+    .login-btn.green-btn { background:var(--accent2); color:#fff; }
+    .login-btn:disabled  { opacity:.35; cursor:not-allowed; }
+    .login-btn:not(:disabled):hover {
+      background:#388bfd;
+      box-shadow: 0 0 0 3px rgba(47,129,247,.3);
+      transform:translateY(-1px);
+    }
+    .login-btn.green-btn:not(:disabled):hover {
+      background:#46c458;
+      box-shadow: 0 0 0 3px rgba(63,185,80,.3);
+    }
+    .login-btn:not(:disabled):active { transform:scale(.98); }
+
+    .login-btn.loading .btn-text { opacity:0; }
+    .login-btn.loading .btn-loader { display:flex; }
+    .btn-loader {
+      display:none; position:absolute; inset:0;
+      align-items:center; justify-content:center; gap:.3rem;
+    }
+    .btn-loader span {
+      display:inline-block; width:5px; height:5px; border-radius:50%;
+      background:#fff; animation:chargeDot .9s ease-in-out infinite;
+    }
+    .btn-loader span:nth-child(1){ animation-delay:0s; }
+    .btn-loader span:nth-child(2){ animation-delay:.16s; }
+    .btn-loader span:nth-child(3){ animation-delay:.32s; }
+    @keyframes chargeDot {
+      0%,80%,100%{ transform:scale(.6); opacity:.4; }
+      40%        { transform:scale(1.2); opacity:1; }
+    }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp   { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:none} }
+    @keyframes fadeDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:none} }
+    .slide-in { animation:fadeUp .4s ease both; }
+
+    /* ── DIVIDER ── */
+    .divider {
+      text-align:center; position:relative;
+      margin:1.3rem 0 .9rem; font-size:.7rem; color:var(--text-muted);
+    }
+    .divider::before,.divider::after {
+      content:''; position:absolute; top:50%; width:40%;
+      height:1px; background:var(--glass-border);
+    }
+    .divider::before{ left:0; } .divider::after{ right:0; }
+
+    /* ── FOOTER ── */
+    .footer {
+      margin-top:1.4rem; font-size:.7rem; color:#3d444d;
+      text-align:center; animation:fadeUp .9s ease .25s both;
+    }
+
+    /* ── TOAST ── */
+    .toast {
+      position:fixed; bottom:1.8rem; left:50%;
+      transform:translateX(-50%) translateY(60px);
+      background:var(--accent2); color:#fff; font-weight:600;
+      padding:.6rem 1.3rem; border-radius:.4rem;
+      font-size:.83rem; z-index:999;
+      transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .35s;
+      opacity:0; white-space:nowrap;
+    }
+    .toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
+
+    /* ── LANDING PAGE ── */
+    .landing { width:100%; min-height:100vh; padding:2rem 0 0; display:flex; flex-direction:column; position:relative; overflow:hidden; background:linear-gradient(180deg, #11151a 0%, #080b0f 70%, #020406 100%); }
+    .landing::before { content:''; position:absolute; inset:0; background:radial-gradient(circle at 16% 14%, rgba(255,255,255,.08), transparent 18%), radial-gradient(circle at 84% 18%, rgba(63,185,80,.12), transparent 16%); pointer-events:none; }
+    .landing-nav { position:relative; z-index:3; width:100%; max-width:1320px; margin:0 auto; padding:1.4rem 1.5rem 0; display:flex; justify-content:space-between; align-items:center; }
+    .landing-nav .logo { color:#fff; letter-spacing:.16em; text-transform:uppercase; font-weight:800; font-size:.95rem; }
+    .landing-nav .nav-links { display:flex; gap:2rem; }
+    .landing-nav .nav-links a { color:rgba(255,255,255,.72); text-decoration:none; font-size:.88rem; transition:color .2s; }
+    .landing-nav .nav-links a:hover { color:#fff; }
+    .hero-headline { position:relative; z-index:3; margin:0; color:#fff; font-weight:900; font-size:min(9.2vw, 8.6rem); letter-spacing:-.06em; line-height:0.88; text-transform:uppercase; max-width:11ch; }
+    .hero-copy { position:relative; z-index:3; max-width:520px; padding:3rem 1.5rem 0; }
+    .hero-copy p { margin-top:1.5rem; color:rgba(255,255,255,.72); font-size:1rem; line-height:1.75; max-width:620px; }
+    .hero-actions { display:flex; flex-wrap:wrap; gap:1rem; margin-top:2rem; }
+    .hero-btn { display:inline-flex; align-items:center; justify-content:center; min-width:170px; border-radius:999px; padding:.95rem 1.4rem; font-weight:700; border:1px solid transparent; cursor:pointer; transition:transform .2s, box-shadow .2s, background .2s; }
+    .hero-btn.primary { background:#fff; color:#111; }
+    .hero-btn.secondary { background:rgba(255,255,255,.08); color:#fff; border-color:rgba(255,255,255,.16); }
+    .hero-btn:hover { transform:translateY(-2px); box-shadow:0 20px 44px rgba(0,0,0,.22); }
+    .hero-content { position:relative; z-index:2; display:grid; grid-template-columns:1fr 1fr; gap:2.6rem; align-items:start; width:100%; max-width:1320px; margin:0 auto; padding:0 1.5rem 3rem; }
+    .hero-visual { position:relative; min-height:620px; display:flex; align-items:flex-start; justify-content:flex-end; padding-top:2rem; padding-right:0; }
+    .hero-visual .shadow { position:absolute; bottom:6%; right:9%; width:64%; height:26px; background:rgba(0,0,0,.24); filter:blur(26px); border-radius:999px; }
+    .hero-car { position:relative; width:100%; max-width:780px; min-height:500px; border-radius:2rem; background:#0f1419; overflow:hidden; box-shadow:0 34px 100px rgba(0,0,0,.35); margin-left:auto; transform:translateX(6%); }
+    .hero-car img { position:absolute; inset:0; width:108%; height:108%; object-fit:cover; transform:scale(1.04); animation:floatCar 8s ease-in-out infinite; }
+    .hero-car::before { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.42)); pointer-events:none; }
+    .hero-car::after { content:''; position:absolute; bottom:18%; left:5%; width:90%; height:52%; border-radius:130px 130px 46px 46px; background:rgba(255,255,255,.045); filter:blur(3px); }
+    .hero-feature { position:absolute; top:6%; right:6%; width:220px; border-radius:1.4rem; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); backdrop-filter:blur(18px); display:flex; flex-direction:column; justify-content:center; padding:1.1rem 1.15rem; }
+    .hero-feature strong { font-size:1.05rem; color:#fff; margin-bottom:.4rem; }
+    .hero-feature span { font-size:.78rem; color:#d6d8de; line-height:1.6; }
+    .hero-meta { display:grid; grid-template-columns:repeat(4,minmax(100px,1fr)); gap:1rem; margin-top:2rem; }
+    .hero-stat { padding:1rem 1.1rem; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1); border-radius:1rem; text-align:center; }
+    .hero-stat .num { font-size:1.35rem; font-weight:700; color:#fff; }
+    .hero-stat .label { margin-top:.35rem; font-size:.8rem; color:rgba(255,255,255,.74); }
+    .hero-bottom { position:relative; z-index:2; background:#fff; border-radius:3rem 3rem 0 0; margin-top:-3rem; padding:3rem 2rem 2rem; box-shadow:0 -18px 70px rgba(0,0,0,.14); }
+    .hero-bottom .about-grid { display:grid; grid-template-columns:1.15fr .85fr; gap:2rem; align-items:center; }
+    .about-copy h2 { font-size:2rem; color:#10161c; margin-bottom:1rem; }
+    .about-copy p { color:#5f6b78; line-height:1.75; font-size:1rem; }
+    .about-card { background:#11171f; border-radius:2rem; padding:1.8rem; color:#f4f4f4; box-shadow:0 22px 70px rgba(0,0,0,.16); }
+    .about-card h3 { margin-bottom:.8rem; font-size:1.1rem; }
+    .about-card p { color:#b9bec7; line-height:1.75; font-size:.92rem; }
+    .about-img { width:100%; border-radius:1.8rem; overflow:hidden; box-shadow:0 22px 72px rgba(0,0,0,.16); }
+    .about-img img { width:100%; display:block; }
+    .landing-sections { max-width:1320px; width:100%; margin:0 auto; padding:0 1rem 3rem; }
+    .feature-grid { display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:1rem; margin-top:2rem; }
+    .feature-card { background:#0f1419; border:1px solid rgba(255,255,255,.06); border-radius:1.1rem; padding:1.45rem; min-height:180px; transition:transform .25s, box-shadow .25s; }
+    .feature-card:hover { transform:translateY(-4px); box-shadow:0 24px 70px rgba(0,0,0,.22); }
+    .feature-card h3 { color:#f4f4f4; margin-bottom:.9rem; font-size:1.05rem; }
+    .feature-card p { color:#b8bcc4; line-height:1.7; font-size:.92rem; }
+    .feature-card strong { display:block; margin-top:1rem; color:#8f97a4; font-size:.82rem; letter-spacing:.06em; }
+    .landing-hidden { display:none; }
+    @keyframes floatCar { 0%,100% { transform:translateY(0) scale(1.08); } 50% { transform:translateY(-14px) scale(1.12); } }
+    @media(max-width:1100px){ .hero-content { grid-template-columns:1fr; } .hero-visual { min-height:520px; } .hero-visual .shadow { width:78%; } }
+    @media(max-width:900px){ .hero-bottom .about-grid { grid-template-columns:1fr; } .hero-bottom { margin-top:-2rem; padding:2.4rem 1.4rem 1.6rem; } }
+    @media(max-width:760px){ .hero-copy { padding-top:1.8rem; } .hero-headline { font-size:clamp(3.8rem, 12vw, 5.8rem); } }
+    @media(max-width:520px){ .landing-nav { padding:1rem 1rem 0; } .hero-headline { font-size:4rem; } .hero-meta { grid-template-columns:1fr 1fr; } .hero-bottom { border-radius:2rem 2rem 0 0; padding:2rem 1rem 1.2rem; } .feature-grid { grid-template-columns:1fr; } }
+
+    @media(max-width:480px){
+      .card{ padding:1.6rem 1.1rem; }
+      .portal-btns{ grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div class="landing" id="landing-page">
+  <div class="landing-nav">
+    <div class="logo">LIMITLESS</div>
+    <div class="nav-links">
+      <a href="#landing-page">About</a>
+      <a href="#portal-card">Portal</a>
+      <a href="#portal-card">Products</a>
+      <a href="#portal-card">Contact</a>
+    </div>
+  </div>
+
+  <div class="hero-content">
+    <div class="hero-copy">
+      <div class="hero-headline">LIMITLESS</div>
+      <p>Elevate your electric vehicle experience with a premium landing page that mirrors the exact high-end style and presence of your car. Enter the secure portal below when you are ready to drive the fleet.</p>
+      <div class="hero-actions">
+        <button class="hero-btn primary" onclick="scrollToPortal()">Open Portal</button>
+        <button class="hero-btn secondary" onclick="scrollToPortal()">Sign In</button>
+      </div>
+      <div class="hero-meta">
+        <div class="hero-stat"><div class="num">610 KM/H</div><div class="label">Range</div></div>
+        <div class="hero-stat"><div class="num">200 KM/H</div><div class="label">Top Speed</div></div>
+        <div class="hero-stat"><div class="num">135 Nm</div><div class="label">Torque</div></div>
+        <div class="hero-stat"><div class="num">100 KWH</div><div class="label">Battery</div></div>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="hero-car">
+        <img src="https://i.pinimg.com/736x/4a/fc/47/4afc47c67b8dd5afe26b632b374a6751.jpg" alt="Dark sports car" />
+        <div class="hero-feature"><strong>New Design</strong><span>Luxury meets performance</span></div>
+      </div>
+      <div class="shadow"></div>
+    </div>
+  </div>
+
+  <div class="hero-bottom">
+    <div class="about-grid">
+      <div class="about-copy">
+        <h2>About NIO</h2>
+        <p>Experience the future of mobility with a design that blends premium electric vehicle styling, bold typography, and a clean interior panel structure. This landing page leads into the secure login portal while keeping the brand experience strong.</p>
+      </div>
+      <div class="about-card">
+        <h3>Performance First</h3>
+        <p>A landing experience built to showcase luxury EV performance and elegant user flow, following the exact aesthetic of the pasted design.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="landing-sections">
+    <div class="hero-sections">
+      <div class="feature-grid">
+        <div class="feature-card"><h3>Elegant Design</h3><p>Experience a clean, magazine-style landing layout that reflects the exact car color palette and premium finish of your EV model.</p><strong>Section I: Design &amp; Styling</strong></div>
+        <div class="feature-card"><h3>Smart Performance</h3><p>Highlight your vehicle’s key metrics in a sleek, easy-to-read format with subtle motion and glowing callouts.</p><strong>Section II: Performance Summary</strong></div>
+        <div class="feature-card"><h3>Fast Access</h3><p>Keep the login portal separate and smooth by using this homepage as a luxury storefront before users enter the secure access area.</p><strong>Section III: Secure Navigation</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="portal-card">
+  <!-- HEADER -->
+  <div class="header">
+    <div class="ev-badge">⚡ EV Analytics Platform</div>
+    <h1>Electric Vehicle <span>Analysis</span> System</h1>
+    <p>Smart EV Data Monitoring &amp; Performance Analysis Platform</p>
+  </div>
+
+  <!-- CARD -->
+  <div class="card">
+
+    <!-- PORTAL SELECTION -->
+    <div id="portal-screen">
+      <div class="portal-label">Select Your Portal</div>
+      <div class="portal-btns">
+        <button class="portal-btn" id="btn-driver" onclick="openLogin('driver')">
+          <span class="icon">👨‍✈️</span>
+          <span class="label">Driver Login</span>
+          <span class="sub">Fleet &amp; Trip Data</span>
+        </button>
+        <button class="portal-btn green" id="btn-admin" onclick="openLogin('admin')">
+          <span class="icon">🧑‍💼</span>
+          <span class="label">Admin Login</span>
+          <span class="sub">System Control</span>
+        </button>
+      </div>
+      <div class="divider">secure access</div>
+      <div style="text-align:center;font-size:0.75rem;color:var(--text-muted);">
+        All connections are encrypted &amp; monitored
+      </div>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="login-screen">
+      <div class="form-header">
+        <button class="back-btn" onclick="goBack()" title="Back">&#8592;</button>
+        <div class="form-title" id="form-title">
+          <span id="portal-icon"></span> <span id="portal-label-text"></span> Portal
+        </div>
+      </div>
+
+      <form id="login-form" novalidate onsubmit="handleLogin(event)">
+
+        <!-- ID Field -->
+        <div class="field">
+          <label for="user-id" id="id-label">Driver ID</label>
+          <div class="input-wrap">
+            <span class="icon-left">🪪</span>
+            <input type="text" id="user-id" placeholder="e.g. DRV001" autocomplete="username"
+              oninput="recheck()" onblur="blurId()" />
+          </div>
+          <div class="err-msg" id="id-err">Invalid Driver ID format (min 5 alphanumeric chars)</div>
+        </div>
+
+        <!-- Email Field -->
+        <div class="field">
+          <label for="email">Email Address</label>
+          <div class="input-wrap">
+            <span class="icon-left">✉️</span>
+            <input type="email" id="email" placeholder="example@domain.com" autocomplete="email"
+              oninput="recheck()" onblur="blurEmail()" />
+          </div>
+          <div class="err-msg" id="email-err">Please enter a valid email (example@domain.com)</div>
+        </div>
+
+        <!-- Password Field -->
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="input-wrap">
+            <span class="icon-left">🔒</span>
+            <input type="password" id="password" placeholder="6–12 chars, A–Z, 0–9"
+              autocomplete="current-password" maxlength="12"
+              oninput="recheck()" onblur="blurPassword()" />
+            <button type="button" class="toggle-pw" id="toggle-pw" onclick="togglePassword()" title="Show/Hide password">
+              👁️
+            </button>
+          </div>
+          <div class="err-msg" id="pw-err">6–12 characters, at least 1 uppercase &amp; 1 number</div>
+        </div>
+
+        <!-- Extras -->
+        <div class="extras">
+          <label class="remember">
+            <input type="checkbox" id="remember-me" /> Remember me
+          </label>
+          <a href="#" class="forgot" onclick="showForgot(event)">Forgot Password?</a>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" class="login-btn" id="login-btn" disabled>
+          <span class="btn-text" id="btn-text">⚡ Sign In</span>
+          <span class="btn-loader">
+            <span></span><span></span><span></span>
+          </span>
+        </button>
+        <div style="margin-top:.7rem;text-align:center;font-size:.7rem;color:var(--text-muted);">
+          Try: ID <code style="color:var(--neon-blue)">DRV001</code> &nbsp;·&nbsp;
+          email <code style="color:var(--neon-blue)">test@mail.com</code> &nbsp;·&nbsp;
+          password <code style="color:var(--neon-blue)">Pass1234</code>
+        </div>
+
+      </form>
+    </div>
+
+  </div><!-- /card -->
+
+  <div class="footer">© 2026 EV Analysis System · Secure Portal v2.4</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  /* ── CANVAS BACKGROUND ── */
+  (function () {
+    const canvas = document.getElementById('bg-canvas');
+    const ctx = canvas.getContext('2d');
+    let W, H, particles = [], gridOffset = 0;
+
+    function resize() {
+      W = canvas.width  = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+
+    function initParticles() {
+      particles = [];
+      const count = Math.floor((W * H) / 18000);
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          r: Math.random() * 1.8 + 0.4,
+          dx: (Math.random() - 0.5) * 0.3,
+          dy: (Math.random() - 0.5) * 0.3,
+          alpha: Math.random() * 0.6 + 0.2,
+          color: Math.random() > 0.5 ? '0,212,255' : '0,255,136'
+        });
+      }
+    }
+
+    function drawGrid() {
+      const size = 60;
+      ctx.strokeStyle = 'rgba(0,212,255,0.045)';
+      ctx.lineWidth = 1;
+      const ox = gridOffset % size;
+      for (let x = -size + ox; x < W + size; x += size) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = -size + ox; y < H + size; y += size) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+    }
+
+    function drawWaves(t) {
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(0,212,255,${0.04 - i * 0.01})`;
+        ctx.lineWidth = 1.5;
+        for (let x = 0; x <= W; x += 4) {
+          const y = H * 0.5
+            + Math.sin((x / W) * Math.PI * 4 + t * 0.8 + i * 1.5) * (30 + i * 20)
+            + Math.sin((x / W) * Math.PI * 2 + t * 0.5) * 15;
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    let t = 0;
+    function frame() {
+      ctx.clearRect(0, 0, W, H);
+      t += 0.012;
+      gridOffset += 0.25;
+
+      drawGrid();
+      drawWaves(t);
+
+      particles.forEach(p => {
+        p.x += p.dx; p.y += p.dy;
+        if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+        if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${p.color},${p.alpha})`;
+        ctx.fill();
+      });
+
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener('resize', () => { resize(); initParticles(); });
+    resize(); initParticles(); frame();
+  })();
+
+  /* ── STATE ── */
+  let currentPortal = 'driver';
+
+  /* ── PORTAL OPEN / CLOSE ── */
+  function openLogin(type) {
+    currentPortal = type;
+    document.getElementById('portal-screen').style.display = 'none';
+    const ls = document.getElementById('login-screen');
+    ls.style.display = 'block';
+    ls.classList.add('slide-in');
+
+    const isAdmin = type === 'admin';
+    document.getElementById('portal-icon').textContent = isAdmin ? '🧑‍💼' : '👨‍✈️';
+    document.getElementById('portal-label-text').textContent = isAdmin ? 'Admin' : 'Driver';
+    document.getElementById('id-label').textContent = isAdmin ? 'Admin ID' : 'Driver ID';
+    document.getElementById('user-id').placeholder = isAdmin ? 'e.g. ADM001' : 'e.g. DRV001';
+    document.getElementById('id-err').textContent =
+      `Invalid ${isAdmin ? 'Admin' : 'Driver'} ID format (min 5 alphanumeric chars)`;
+
+    const ft = document.getElementById('form-title');
+    ft.className = 'form-title' + (isAdmin ? ' green' : '');
+
+    const btn = document.getElementById('login-btn');
+    btn.className = 'login-btn' + (isAdmin ? ' green-btn' : '');
+
+    // Reset form cleanly
+    document.getElementById('login-form').reset();
+    ['user-id', 'email', 'password'].forEach(id => {
+      document.getElementById(id).className = '';
+    });
+    ['id-err', 'email-err', 'pw-err'].forEach(id => {
+      document.getElementById(id).classList.remove('show');
+    });
+    btn.disabled = true;
+  }
+
+  function goBack() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('portal-screen').style.display = 'block';
+  }
+
+  function scrollToPortal() {
+    document.getElementById('portal-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* ── VALIDATION ── */
+  const EMAIL_RE = /^[^\s@]+@[^\s@]{2,}\.[a-zA-Z]{2,}$/;
+  const ID_RE    = /^[a-zA-Z0-9]{5,}$/;
+
+  /* Check one field and mark it, return true/false */
+  function checkField(inputId, errId, testFn) {
+    const inp = document.getElementById(inputId);
+    const err = document.getElementById(errId);
+    const val = inp.value;
+    if (val.length === 0) {
+      inp.className = '';
+      err.classList.remove('show');
+      return false;
+    }
+    const ok = testFn(val);
+    inp.className = ok ? 'valid' : 'invalid';
+    err.classList.toggle('show', !ok);
+    return ok;
+  }
+
+  function validateId() {
+    return checkField('user-id', 'id-err', v => ID_RE.test(v));
+  }
+
+  function validateEmail() {
+    return checkField('email', 'email-err', v => EMAIL_RE.test(v));
+  }
+
+  function validatePassword() {
+    return checkField('password', 'pw-err',
+      v => v.length >= 6 && v.length <= 12 && /[A-Z]/.test(v) && /[0-9]/.test(v));
+  }
+
+  /* Called on every keystroke — re-evaluate all three and toggle button */
+  function recheck() {
+    const idOk  = validateId();
+    const emOk  = validateEmail();
+    const pwOk  = validatePassword();
+    document.getElementById('login-btn').disabled = !(idOk && emOk && pwOk);
+  }
+
+  /* Force-show errors on blur even if field is empty */
+  function blurField(inputId, errId, testFn) {
+    const inp = document.getElementById(inputId);
+    const err = document.getElementById(errId);
+    const val = inp.value;
+    if (val.length === 0) {
+      inp.className = 'invalid';
+      err.classList.add('show');
+      return;
+    }
+    const ok = testFn(val);
+    inp.className = ok ? 'valid' : 'invalid';
+    err.classList.toggle('show', !ok);
+  }
+
+  function blurId()       { blurField('user-id',  'id-err',    v => ID_RE.test(v)); }
+  function blurEmail()    { blurField('email',     'email-err', v => EMAIL_RE.test(v)); }
+  function blurPassword() { blurField('password',  'pw-err',
+    v => v.length >= 6 && v.length <= 12 && /[A-Z]/.test(v) && /[0-9]/.test(v)); }
+
+  /* ── TOGGLE PASSWORD ── */
+  function togglePassword() {
+    const pw  = document.getElementById('password');
+    const btn = document.getElementById('toggle-pw');
+    if (pw.type === 'password') { pw.type = 'text';     btn.textContent = '🙈'; }
+    else                        { pw.type = 'password'; btn.textContent = '👁️'; }
+  }
+
+  /* ── SUBMIT ── */
+  function handleLogin(e) {
+    e.preventDefault();
+
+    const btn = document.getElementById('login-btn');
+    if (btn.disabled) return;
+
+    btn.classList.add('loading');
+    btn.disabled = true;
+
+    // Grab entered values
+    const userId = document.getElementById('user-id').value.trim();
+    const email  = document.getElementById('email').value.trim();
+
+    setTimeout(() => {
+      btn.classList.remove('loading');
+
+      // Save to sessionStorage so dashboards can read them
+      sessionStorage.setItem('ev_user_id',    userId);
+      sessionStorage.setItem('ev_user_email', email);
+      sessionStorage.setItem('ev_portal',     currentPortal);
+      // Store the ID exactly as typed — shown in dashboard profile
+      sessionStorage.setItem('ev_display_name', userId);
+
+      showToast(`⚡ ${currentPortal === 'admin' ? 'Admin' : 'Driver'} authenticated!`);
+      setTimeout(() => {
+        document.body.style.transition = 'opacity 0.5s ease';
+        document.body.style.opacity = '0';
+        setTimeout(() => {
+          window.location.href = currentPortal === 'admin'
+            ? 'admin-dashboard.html'
+            : 'driver-dashboard.html';
+        }, 520);
+      }, 800);
+    }, 1800);
+  }
+
+  /* ── FORGOT PASSWORD ── */
+  function showForgot(e) {
+    e.preventDefault();
+    showToast('📧 Password reset link sent to your email.');
+  }
+
+  /* ── TOAST ── */
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+</script>
+</body>
+</html>
