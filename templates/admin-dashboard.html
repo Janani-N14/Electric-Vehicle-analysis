@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard · EV Analysis System</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --bg:#020b18;--blue:#00d4ff;--green:#00ff88;--orange:#ffaa00;--red:#ff4d6d;--purple:#b57aff;
+      --blue-dim:rgba(0,212,255,.12);--green-dim:rgba(0,255,136,.12);
+      --glass:rgba(4,15,34,.7);--border:rgba(0,212,255,.2);
+      --text:#e8f4ff;--muted:#7a9bbf;
+    }
+    html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);}
+    #bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
+    body{animation:fadeIn .55s ease both;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+    .shell{position:relative;z-index:1;display:flex;min-height:100vh;}
+
+    /* SIDEBAR */
+    .sidebar{width:230px;flex-shrink:0;background:var(--glass);border-right:1px solid var(--border);
+      backdrop-filter:blur(24px);display:flex;flex-direction:column;padding:1.4rem 1rem;
+      position:sticky;top:0;height:100vh;overflow-y:auto;transition:transform .3s;}
+    .logo{display:flex;align-items:center;gap:.6rem;margin-bottom:2rem;cursor:pointer;}
+    .logo-text{font-size:.9rem;font-weight:700;
+      background:linear-gradient(90deg,var(--blue),var(--green));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .nav-section{font-size:.62rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:1.1rem 0 .4rem .3rem;}
+    .nav-item{display:flex;align-items:center;gap:.7rem;padding:.6rem .75rem;border-radius:.6rem;
+      font-size:.84rem;color:var(--muted);cursor:pointer;transition:background .2s,color .2s;
+      text-decoration:none;margin-bottom:.15rem;border:none;background:none;width:100%;font-family:inherit;}
+    .nav-item:hover{background:rgba(0,255,136,.1);color:var(--green);}
+    .nav-item.active{background:rgba(0,255,136,.1);color:var(--green);}
+    .nav-item .ni{font-size:1rem;width:1.2rem;text-align:center;}
+    .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:.58rem;
+      padding:.1rem .4rem;border-radius:2rem;font-weight:700;}
+    .sidebar-footer{margin-top:auto;padding-top:1rem;border-top:1px solid var(--border);}
+    .user-chip{display:flex;align-items:center;gap:.7rem;}
+    .avatar{width:2.2rem;height:2.2rem;border-radius:50%;
+      background:linear-gradient(135deg,var(--green),#00c96a);
+      display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
+    .user-info .uname{font-size:.82rem;font-weight:600;}
+    .user-info .urole{font-size:.7rem;color:var(--muted);}
+    .logout-btn{margin-top:.8rem;width:100%;padding:.55rem;background:rgba(255,77,109,.08);
+      border:1px solid rgba(255,77,109,.3);border-radius:.5rem;color:var(--red);
+      font-size:.78rem;cursor:pointer;font-family:inherit;transition:background .2s,box-shadow .2s;}
+    .logout-btn:hover{background:rgba(255,77,109,.18);box-shadow:0 0 10px rgba(255,77,109,.25);}
+
+    /* HAMBURGER */
+    .hamburger{display:none;position:fixed;top:1rem;left:1rem;z-index:100;
+      background:var(--glass);border:1px solid var(--border);border-radius:.5rem;
+      padding:.45rem .55rem;cursor:pointer;backdrop-filter:blur(12px);font-size:1.1rem;}
+    .sidebar-overlay{display:none;position:fixed;inset:0;z-index:49;background:rgba(0,0,0,.5);}
+
+    /* MAIN */
+    .main{flex:1;padding:1.5rem;overflow-x:hidden;min-width:0;}
+    .section{display:none;}
+    .section.active{display:block;animation:fadeIn .4s ease both;}
+
+    /* TOPBAR */
+    .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.6rem;flex-wrap:wrap;gap:.8rem;}
+    .topbar h2{font-size:1.25rem;font-weight:700;}
+    .topbar h2 span{color:var(--green);}
+    .topbar-right{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;}
+    .badge-pill{background:var(--blue-dim);border:1px solid var(--border);
+      border-radius:2rem;padding:.28rem .85rem;font-size:.72rem;color:var(--blue);}
+    .badge-pill.green{background:var(--green-dim);border-color:rgba(0,255,136,.3);color:var(--green);}
+    .badge-pill.red{background:rgba(255,77,109,.12);border-color:rgba(255,77,109,.3);color:var(--red);}
+
+    /* GRIDS */
+    .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.4rem;}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.4rem;}
+    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.4rem;}
+
+    /* CARD */
+    .card{background:var(--glass);border:1px solid var(--border);border-radius:1rem;
+      backdrop-filter:blur(16px);padding:1.2rem;transition:border-color .2s,box-shadow .2s;}
+    .card:hover{border-color:rgba(0,212,255,.3);box-shadow:0 0 16px rgba(0,212,255,.06);}
+    .card-title{font-size:.7rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:.8rem;}
+    .card-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;}
+    .card-title-row .card-title{margin-bottom:0;}
+    .pill-small{font-size:.65rem;padding:.2rem .6rem;border-radius:2rem;
+      background:var(--green-dim);border:1px solid rgba(0,255,136,.25);color:var(--green);}
+    .pill-small.red{background:rgba(255,77,109,.12);border-color:rgba(255,77,109,.3);color:var(--red);}
+
+    /* STAT CARDS */
+    .stat-card{cursor:pointer;}
+    .stat-icon{font-size:1.5rem;margin-bottom:.3rem;}
+    .stat-value{font-size:1.55rem;font-weight:800;line-height:1.1;}
+    .stat-value.blue{color:var(--blue);}.stat-value.green{color:var(--green);}
+    .stat-value.orange{color:var(--orange);}.stat-value.red{color:var(--red);}
+    .stat-label{font-size:.76rem;color:var(--muted);margin-top:.2rem;}
+    .stat-delta{font-size:.68rem;color:var(--green);margin-top:.15rem;}
+    .stat-delta.red{color:var(--red);}
+
+    /* TABLE */
+    .table-wrap{overflow-x:auto;}
+    .table-wrap::-webkit-scrollbar{height:4px;}
+    .table-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+    table{width:100%;border-collapse:collapse;font-size:.8rem;}
+    th{padding:.5rem .8rem;text-align:left;color:var(--muted);font-size:.67rem;
+      letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--border);white-space:nowrap;}
+    td{padding:.6rem .8rem;border-bottom:1px solid rgba(0,212,255,.07);vertical-align:middle;}
+    tr:last-child td{border-bottom:none;}
+    tr:hover td{background:rgba(0,212,255,.04);}
+    .td-id{color:var(--blue);font-weight:700;font-family:monospace;}
+    .status-badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;
+      padding:.2rem .6rem;border-radius:2rem;font-weight:600;white-space:nowrap;}
+    .status-badge.active{background:rgba(0,255,136,.12);color:var(--green);}
+    .status-badge.idle{background:rgba(255,170,0,.12);color:var(--orange);}
+    .status-badge.charging{background:rgba(0,212,255,.12);color:var(--blue);}
+    .status-badge.offline{background:rgba(255,77,109,.12);color:var(--red);}
+    .dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;}
+
+    /* ACTION BTNS */
+    .action-btn{background:none;border:1px solid var(--border);border-radius:.4rem;
+      padding:.28rem .6rem;font-size:.72rem;color:var(--muted);cursor:pointer;
+      transition:border-color .2s,color .2s,box-shadow .2s;font-family:inherit;}
+    .action-btn:hover{border-color:var(--blue);color:var(--blue);box-shadow:0 0 8px rgba(0,212,255,.15);}
+    .action-btn.green{border-color:rgba(0,255,136,.4);color:var(--green);}
+    .action-btn.green:hover{border-color:var(--green);box-shadow:0 0 8px rgba(0,255,136,.2);}
+    .action-btn.red{border-color:rgba(255,77,109,.4);color:var(--red);}
+    .action-btn.red:hover{border-color:var(--red);box-shadow:0 0 8px rgba(255,77,109,.2);}
+
+    /* BAR CHART */
+    .bar-chart{display:flex;align-items:flex-end;gap:8px;height:120px;}
+    .bc-col{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;cursor:pointer;padding:0 4px}
+    .bc-bar{width:100%;border-radius:6px 6px 0 0;min-height:6px;background:linear-gradient(to top,var(--blue),rgba(0,212,255,.25));
+      transition:height .7s cubic-bezier(.2,.9,.2,1),background .25s,filter .2s;transform-origin:bottom}
+    .bc-bar:hover{filter:brightness(1.5);}
+    .bc-bar.green{background:linear-gradient(to top,var(--green),rgba(0,255,136,.3));}
+    .bc-bar.orange{background:linear-gradient(to top,var(--orange),rgba(255,170,0,.3));}
+    .bc-label{font-size:.6rem;color:var(--muted);}
+
+    /* CHARGING CINEMATIC (admin) */
+    #cinema-overlay-admin{position:fixed;inset:0;z-index:1200;display:none;align-items:center;justify-content:center;background:radial-gradient(ellipse at center, rgba(0,0,0,.4), rgba(0,0,0,.85));}
+    #cinema-overlay-admin.open{display:flex}
+    .cinema-stage-admin{position:relative;width:88%;max-width:1200px;height:82%;background:linear-gradient(180deg,#00121a 0%, #021822 60%);border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden;border:1px solid rgba(255,255,255,.03);}
+    #cinema-canvas-admin{position:absolute;inset:0;z-index:1}
+    .cinema-battery-admin{position:absolute;right:7%;top:9%;width:300px;height:560px;z-index:2;display:flex;align-items:flex-end;justify-content:center}
+    .cinema-battery-admin svg{width:100%;height:100%}
+    .cinema-close-admin{position:absolute;top:12px;right:12px;z-index:30;padding:.5rem .6rem;border-radius:.5rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.04);cursor:pointer;color:var(--text)}
+    .cinema-hud-admin{position:absolute;left:6%;bottom:8%;z-index:3;color:var(--muted);font-size:.95rem}
+    .cinema-hud-admin .val{font-size:1.6rem;color:var(--green);font-weight:800}
+
+
+    /* LINE CHART SVG */
+    .chart-svg{width:100%;overflow:visible;}
+
+    /* ALERTS */
+    .alerts-list{display:flex;flex-direction:column;gap:.6rem;max-height:260px;overflow-y:auto;}
+    .alert-item{display:flex;align-items:flex-start;gap:.7rem;
+      border-radius:.65rem;padding:.6rem .8rem;position:relative;transition:opacity .3s;}
+    .alert-item.crit{background:rgba(255,77,109,.05);border:1px solid rgba(255,77,109,.2);}
+    .alert-item.warn{background:rgba(255,170,0,.05);border:1px solid rgba(255,170,0,.22);}
+    .alert-item.info{background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.18);}
+    .alert-icon{font-size:1.05rem;flex-shrink:0;margin-top:1px;}
+    .alert-title{font-size:.8rem;font-weight:600;}
+    .alert-sub{font-size:.7rem;color:var(--muted);margin-top:.1rem;}
+    .alert-time{font-size:.67rem;color:var(--muted);margin-left:auto;flex-shrink:0;white-space:nowrap;}
+    .alert-dismiss{background:none;border:none;cursor:pointer;color:var(--muted);font-size:.8rem;
+      margin-left:.4rem;padding:0;transition:color .2s;}
+    .alert-dismiss:hover{color:var(--red);}
+
+    /* STATION CARDS */
+    .station-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.7rem;}
+    .st-card{background:rgba(0,212,255,.04);border:1px solid var(--border);
+      border-radius:.7rem;padding:.75rem .85rem;cursor:pointer;transition:border-color .2s,transform .15s;}
+    .st-card:hover{border-color:var(--blue);transform:translateY(-2px);}
+    .st-name{font-size:.82rem;font-weight:600;margin-bottom:.25rem;}
+    .st-meta{font-size:.7rem;color:var(--muted);margin-bottom:.5rem;}
+    .st-bar-outer{background:rgba(255,255,255,.06);border-radius:2rem;height:.4rem;margin-bottom:.35rem;}
+    .st-bar-inner{height:100%;border-radius:2rem;transition:width .8s ease;
+      background:linear-gradient(90deg,var(--blue),var(--green));}
+    .st-footer{display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted);}
+
+    /* REPORT TABS */
+    .report-tabs{display:flex;gap:.4rem;margin-bottom:1rem;}
+    .rtab{padding:.3rem .85rem;border-radius:2rem;font-size:.73rem;cursor:pointer;
+      border:1px solid var(--border);color:var(--muted);transition:all .2s;background:none;font-family:inherit;}
+    .rtab.active,.rtab:hover{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+    .report-row{display:flex;align-items:center;justify-content:space-between;
+      padding:.5rem 0;border-bottom:1px solid rgba(0,212,255,.07);font-size:.82rem;}
+    .report-row:last-child{border-bottom:none;}
+    .rval{font-weight:700;color:var(--blue);}
+    .rdelta{font-size:.7rem;color:var(--green);}
+    .rdelta.neg{color:var(--red);}
+
+    /* DONUT */
+    .donut-wrap{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;}
+    .donut-legend{display:flex;flex-direction:column;gap:.45rem;}
+    .dl-row{display:flex;align-items:center;gap:.5rem;font-size:.78rem;cursor:pointer;}
+    .dl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+
+    /* ADD DRIVER FORM */
+    .form-group{margin-bottom:1rem;}
+    .form-label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.4rem;display:block;}
+    .form-input{width:100%;background:rgba(0,212,255,.04);border:1.5px solid rgba(0,212,255,.2);
+      border-radius:.6rem;padding:.6rem .85rem;color:var(--text);font-size:.87rem;outline:none;
+      font-family:inherit;transition:border-color .2s,box-shadow .2s;}
+    .form-input:focus{border-color:var(--blue);box-shadow:0 0 10px rgba(0,212,255,.15);}
+    .form-select{appearance:none;background-image:none;}
+
+    /* SETTINGS */
+    .settings-row{display:flex;align-items:center;justify-content:space-between;
+      padding:.65rem 0;border-bottom:1px solid rgba(0,212,255,.07);font-size:.85rem;}
+    .settings-row:last-child{border-bottom:none;}
+    .toggle{position:relative;width:2.4rem;height:1.3rem;cursor:pointer;}
+    .toggle input{display:none;}
+    .toggle-track{position:absolute;inset:0;border-radius:2rem;background:rgba(255,255,255,.1);
+      border:1px solid var(--border);transition:background .2s;}
+    .toggle input:checked~.toggle-track{background:var(--green);}
+    .toggle-thumb{position:absolute;top:2px;left:2px;width:calc(1.3rem - 6px);height:calc(1.3rem - 6px);
+      border-radius:50%;background:#fff;transition:transform .2s;pointer-events:none;}
+    .toggle input:checked~.toggle-thumb{transform:translateX(1.1rem);}
+
+    /* MODAL */
+    .modal-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.65);
+      backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:1rem;}
+    .modal-overlay.open{display:flex;animation:fadeIn .25s ease both;}
+    .modal{background:#040f22;border:1px solid var(--border);border-radius:1rem;padding:1.8rem;
+      max-width:460px;width:100%;box-shadow:0 0 40px rgba(0,212,255,.12);}
+    .modal-title{font-size:1rem;font-weight:700;margin-bottom:1rem;color:var(--green);}
+    .modal-body{font-size:.85rem;color:var(--muted);line-height:1.7;}
+    .modal-footer{display:flex;gap:.6rem;margin-top:1.2rem;}
+    .modal-close{flex:1;padding:.6rem;border:1px solid var(--border);
+      border-radius:.5rem;background:none;color:var(--muted);cursor:pointer;font-family:inherit;transition:border-color .2s,color .2s;}
+    .modal-close:hover{border-color:var(--blue);color:var(--blue);}
+    .modal-action{flex:1;padding:.6rem;border:1px solid rgba(0,255,136,.35);
+      border-radius:.5rem;background:var(--green-dim);color:var(--green);cursor:pointer;font-family:inherit;
+      font-size:.85rem;font-weight:600;transition:background .2s;}
+    .modal-action:hover{background:rgba(0,255,136,.2);}
+
+    /* TOAST */
+    .toast{position:fixed;bottom:1.8rem;left:50%;transform:translateX(-50%) translateY(60px);
+      background:var(--green);color:#000;font-weight:700;padding:.65rem 1.4rem;
+      border-radius:2rem;font-size:.85rem;z-index:999;
+      transition:transform .4s cubic-bezier(.34,1.56,.64,1),opacity .4s;opacity:0;white-space:nowrap;}
+    .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+    .toast.blue{background:var(--blue);} .toast.red{background:var(--red);}
+
+    /* SCROLLBARS */
+    ::-webkit-scrollbar{width:5px;height:5px;}
+    ::-webkit-scrollbar-track{background:transparent;}
+    ::-webkit-scrollbar-thumb{background:rgba(0,212,255,.2);border-radius:3px;}
+
+    @media(max-width:1050px){.grid-4{grid-template-columns:repeat(2,1fr);}.grid-3{grid-template-columns:1fr 1fr;}}
+    @media(max-width:680px){
+      .sidebar{position:fixed;z-index:50;transform:translateX(-100%);}
+      .sidebar.open{transform:translateX(0);}
+      .sidebar-overlay.open{display:block;}
+      .hamburger{display:block;}
+      .main{padding:1rem;padding-top:3.5rem;}
+      .grid-4,.grid-3,.grid-2{grid-template-columns:1fr;}
+      .station-grid{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<div class="shell">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="logo" onclick="navigate('dashboard')">
+      <span style="font-size:1.4rem">⚡</span>
+      <span class="logo-text">EV Analysis</span>
+    </div>
+
+    <div class="nav-section">Overview</div>
+    <button class="nav-item active" data-section="dashboard" onclick="navigate('dashboard')">
+      <span class="ni">📊</span> Dashboard
+    </button>
+    <button class="nav-item" data-section="fleet" onclick="navigate('fleet')">
+      <span class="ni">🚗</span> Fleet Management
+    </button>
+
+    <div class="nav-section">Operations</div>
+    <button class="nav-item" data-section="drivers" onclick="navigate('drivers')">
+      <span class="ni">👥</span> Drivers
+    </button>
+    <button class="nav-item" data-section="vehicles" onclick="navigate('vehicles')">
+      <span class="ni">🚗</span> Vehicle Performance
+    </button>
+    <button class="nav-item" data-section="battery" onclick="navigate('battery')">
+      <span class="ni">🔋</span> Battery Monitor
+    </button>
+    <button class="nav-item" data-section="stations" onclick="navigate('stations')">
+      <span class="ni">⚡</span> Charging Stations
+    </button>
+    <button class="nav-item" data-section="charging-analytics" onclick="navigate('charging-analytics')">
+      <span class="ni">📡</span> Charging Analytics
+    </button>
+    <button class="nav-item" data-section="analytics" onclick="navigate('analytics')">
+      <span class="ni">📈</span> Analytics
+    </button>
+    <button class="nav-item" data-section="revenue" onclick="navigate('revenue')">
+      <span class="ni">💰</span> Revenue
+    </button>
+
+    <div class="nav-section">System</div>
+    <button class="nav-item" data-section="maintenance" onclick="navigate('maintenance')">
+      <span class="ni">🔧</span> Maintenance
+    </button>
+    <button class="nav-item" data-section="alerts" onclick="navigate('alerts')">
+      <span class="ni">🔔</span> Alerts
+      <span class="nav-badge" id="alert-nav-badge">3</span>
+    </button>
+    <button class="nav-item" data-section="reports" onclick="navigate('reports')">
+      <span class="ni">📋</span> Reports
+    </button>
+    <button class="nav-item" data-section="settings" onclick="navigate('settings')">
+      <span class="ni">⚙️</span> Settings
+    </button>
+
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <div class="avatar" id="sb-admin-avatar">🧑‍💼</div>
+        <div class="user-info">
+          <div class="uname" id="sb-admin-name">Sarah Admin</div>
+          <div class="urole" id="sb-admin-role">Admin · ADM00001</div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="logout()">⏻ Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- ═══════════════ DASHBOARD ═══════════════ -->
+    <div class="section active" id="sec-dashboard">
+      <div class="topbar">
+        <h2>Admin <span>Dashboard</span></h2>
+        <div class="topbar-right">
+          <span class="badge-pill red" style="cursor:pointer" onclick="navigate('alerts')">🔔 <span id="alert-count">3</span> Alerts</span>
+          <span class="badge-pill green">● System Online</span>
+          <span class="badge-pill" id="clock-pill">📅 --</span>
+        </div>
+      </div>
+
+      <!-- FLEET STATS -->
+      <div class="grid-4">
+        <div class="card stat-card" onclick="navigate('fleet')">
+          <div class="stat-icon">🚗</div>
+          <div class="stat-value blue" id="stat-total">48</div>
+          <div class="stat-label">Total Vehicles</div>
+          <div class="stat-delta">Fleet capacity</div>
+        </div>
+        <div class="card stat-card" onclick="showModal('Active Vehicles','31 vehicles currently on road.\nRoutes active across 8 zones.\nAvg speed: 52 km/h\nTotal distance today: 2,418 km')">
+          <div class="stat-icon">✅</div>
+          <div class="stat-value green" id="stat-active">31</div>
+          <div class="stat-label">Active on Road</div>
+          <div class="stat-delta">↑ 3 since yesterday</div>
+        </div>
+        <div class="card stat-card" onclick="showModal('Idle Vehicles','9 vehicles currently in depot.\nVehicles: EV-3017, EV-3022, EV-3031, EV-3040, EV-3041, EV-3044, EV-3045, EV-3047, EV-3048\nAvg idle time: 2h 14m')">
+          <div class="stat-icon">💤</div>
+          <div class="stat-value orange" id="stat-idle">9</div>
+          <div class="stat-label">Idle Vehicles</div>
+          <div class="stat-delta">In depot</div>
+        </div>
+        <div class="card stat-card" onclick="navigate('stations')">
+          <div class="stat-icon">🔌</div>
+          <div class="stat-value blue" id="stat-charging">8</div>
+          <div class="stat-label">Charging Now</div>
+          <div class="stat-delta">2 fast · 6 standard</div>
+        </div>
+      </div>
+
+      <!-- ANALYTICS ROW -->
+      <div class="grid-3">
+        <!-- Donut -->
+        <div class="card">
+          <div class="card-title">🚗 Fleet Status Breakdown</div>
+          <div class="donut-wrap">
+            <svg width="110" height="110" viewBox="0 0 110 110" style="flex-shrink:0;">
+              <circle cx="55" cy="55" r="40" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="18"/>
+              <circle id="donut-active" cx="55" cy="55" r="40" fill="none" stroke="var(--green)" stroke-width="18"
+                stroke-dasharray="163 88" stroke-dashoffset="251" transform="rotate(-90 55 55)"/>
+              <circle id="donut-charging" cx="55" cy="55" r="40" fill="none" stroke="var(--blue)" stroke-width="18"
+                stroke-dasharray="42 209" stroke-dashoffset="88" transform="rotate(-90 55 55)"/>
+              <circle id="donut-idle" cx="55" cy="55" r="40" fill="none" stroke="var(--orange)" stroke-width="18"
+                stroke-dasharray="45 206" stroke-dashoffset="46" transform="rotate(-90 55 55)"/>
+              <text id="donut-total-text" x="55" y="52" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="700">48</text>
+              <text cx="55" cy="64" x="55" y="64" text-anchor="middle" fill="var(--muted)" font-size="8">vehicles</text>
+            </svg>
+            <div class="donut-legend">
+              <div class="dl-row" onclick="showModal('Active Fleet','Active vehicles on road.\nAll assigned to drivers.\nAvg utilization: 64% today.')">
+                <div class="dl-dot" style="background:var(--green)"></div><span>Active <strong id="legend-active">31</strong></span>
+              </div>
+              <div class="dl-row" onclick="showModal('Charging Fleet','Vehicles at charging stations.\nFast DC and standard AC chargers.')">
+                <div class="dl-dot" style="background:var(--blue)"></div><span>Charging <strong id="legend-charging">8</strong></span>
+              </div>
+              <div class="dl-row" onclick="showModal('Idle Fleet','Vehicles idle in depot.\nReady for deployment.\nAvg battery: 82%.')">
+                <div class="dl-dot" style="background:var(--orange)"></div><span>Idle <strong id="legend-idle">9</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Energy Bar Chart -->
+        <div class="card">
+          <div class="card-title">⚡ Energy Consumption (kWh) — This Week</div>
+          <div class="bar-chart" id="energy-chart"></div>
+          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+        </div>
+
+        <!-- Trend Line -->
+        <div class="card">
+          <div class="card-title">📈 Fleet Usage Trend — 7 Days</div>
+          <svg class="chart-svg" viewBox="0 0 260 75" style="height:85px;">
+            <defs>
+              <linearGradient id="lg1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#00d4ff" stop-opacity=".35"/>
+                <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path id="trend-area" fill="url(#lg1)"/>
+            <path id="trend-line" fill="none" stroke="var(--blue)" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+            <g id="trend-dots"></g>
+          </svg>
+          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLE + ALERTS -->
+      <div class="grid-2">
+        <!-- Driver table (preview) -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title">👥 Driver Overview</div>
+            <button class="action-btn green" onclick="navigate('drivers')">View All →</button>
+          </div>
+          <div class="table-wrap">
+            <table id="dash-driver-table">
+              <thead><tr>
+                <th>ID</th><th>Name</th><th>Vehicle</th><th>Status</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Alerts preview -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title">🔔 Recent Alerts</div>
+            <button class="action-btn" style="color:var(--red);border-color:rgba(255,77,109,.4)" onclick="navigate('alerts')">View All →</button>
+          </div>
+          <div class="alerts-list" id="dash-alerts"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ FLEET MANAGEMENT ═══════════════ -->
+    <div class="section" id="sec-fleet">
+      <div class="topbar"><h2>Fleet <span>Management</span></h2>
+        <button class="action-btn green" style="padding:.45rem 1rem" onclick="openAddVehicleModal()">+ Add Vehicle</button>
+      </div>
+      <div class="card">
+        <div class="card-title">🚗 All Fleet Vehicles</div>
+        <div class="table-wrap">
+          <table id="fleet-table">
+            <thead><tr>
+              <th>Vehicle ID</th><th>Model</th><th>Plate</th><th>Driver</th><th>Battery</th><th>Status</th><th>Odometer</th><th></th>
+            </tr></thead>
+            <tbody id="fleet-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ DRIVERS ═══════════════ -->
+    <div class="section" id="sec-drivers">
+      <div class="topbar">
+        <h2>Driver <span>Management</span></h2>
+        <button class="action-btn green" style="padding:.45rem 1rem" onclick="openAddDriver()">+ Add Driver</button>
+      </div>
+      <div class="card" id="add-driver-form" style="display:none;margin-bottom:1.4rem;">
+        <div class="card-title">➕ Add New Driver</div>
+        <div class="grid-2" style="margin-bottom:0">
+          <div>
+            <div class="form-group"><label class="form-label">Driver ID</label><input class="form-input" id="new-id" placeholder="DRV00200"/></div>
+            <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="new-name" placeholder="John Smith"/></div>
+          </div>
+          <div>
+            <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="new-email" placeholder="john@evfleet.com"/></div>
+            <div class="form-group">
+              <label class="form-label">Assigned Vehicle</label>
+              <select class="form-input form-select" id="new-vehicle">
+                <option>Tesla Model 3</option><option>Nissan Leaf</option>
+                <option>Hyundai Ioniq 6</option><option>BYD Atto 3</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.6rem;margin-top:.8rem;">
+          <button class="action-btn green" style="flex:1;padding:.6rem" onclick="addDriver()">Save Driver</button>
+          <button class="action-btn red" style="flex:1;padding:.6rem" onclick="closeAddDriver()">Cancel</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">👥 All Drivers</div>
+          <input id="driver-search" placeholder="Search drivers…" style="background:rgba(0,212,255,.05);border:1px solid var(--border);border-radius:.5rem;padding:.35rem .7rem;color:var(--text);font-size:.78rem;outline:none;width:160px;" oninput="filterDrivers(this.value)"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Driver ID</th><th>Name</th><th>Email</th><th>Vehicle</th><th>Status</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="drivers-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ STATIONS ═══════════════ -->
+    <div class="section" id="sec-stations">
+      <div class="topbar"><h2>Charging <span>Stations</span></h2></div>
+      <div class="grid-4" style="margin-bottom:1.4rem;">
+        <div class="card stat-card"><div class="stat-icon">⚡</div><div class="stat-value green">4</div><div class="stat-label">Stations Online</div></div>
+        <div class="card stat-card"><div class="stat-icon">🔌</div><div class="stat-value blue">42</div><div class="stat-label">Total Ports</div></div>
+        <div class="card stat-card"><div class="stat-icon">✅</div><div class="stat-value green">25</div><div class="stat-label">Ports In Use</div></div>
+        <div class="card stat-card"><div class="stat-icon">⚠️</div><div class="stat-value red">1</div><div class="stat-label">Faults</div></div>
+      </div>
+      <div class="grid-2" id="stations-detail"></div>
+    </div>
+
+    <!-- ═══════════════ ANALYTICS ═══════════════ -->
+    <div class="section" id="sec-analytics">
+      <div class="topbar"><h2>EV <span>Analytics</span></h2></div>
+      <div class="grid-4" style="margin-bottom:1.4rem;">
+        <div class="card stat-card"><div class="stat-icon">📍</div><div class="stat-value blue">2,418 km</div><div class="stat-label">Today Distance</div><div class="stat-delta">↑ 8%</div></div>
+        <div class="card stat-card"><div class="stat-icon">⚡</div><div class="stat-value green">512 kWh</div><div class="stat-label">Today Energy</div><div class="stat-delta">↑ 5%</div></div>
+        <div class="card stat-card"><div class="stat-icon">💚</div><div class="stat-value orange">4.7 km/kWh</div><div class="stat-label">Fleet Efficiency</div><div class="stat-delta">↑ 0.2</div></div>
+        <div class="card stat-card"><div class="stat-icon">💰</div><div class="stat-value purple">₹12,800</div><div class="stat-label">Charging Cost</div><div class="stat-delta red">↑ 3%</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">📈 Weekly Energy Trend</div>
+          <div class="bar-chart" id="analytics-chart" style="height:110px;"></div>
+          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🏆 Top Performing Drivers</div>
+          <div style="display:flex;flex-direction:column;gap:.6rem;" id="top-drivers"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ ALERTS ═══════════════ -->
+    <div class="section" id="sec-alerts">
+      <div class="topbar">
+        <h2>Alerts <span>Panel</span></h2>
+        <button class="action-btn red" onclick="dismissAll()">Dismiss All</button>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">🔔 All Alerts</div>
+          <span class="pill-small red" id="alerts-count-pill">3 Active</span>
+        </div>
+        <div class="alerts-list" style="max-height:500px;" id="all-alerts"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ REPORTS ═══════════════ -->
+    <div class="section" id="sec-reports">
+      <div class="topbar"><h2>Fleet <span>Reports</span></h2>
+        <button class="action-btn green" onclick="exportSectionToPDF('sec-reports','fleet-report.pdf')">Export PDF</button>
+      </div>
+      <div class="card" style="margin-bottom:1.4rem;">
+        <div class="report-tabs">
+          <button class="rtab active" onclick="switchTab(this,'daily')">Daily</button>
+          <button class="rtab" onclick="switchTab(this,'weekly')">Weekly</button>
+          <button class="rtab" onclick="switchTab(this,'monthly')">Monthly</button>
+        </div>
+        <div class="grid-2" style="margin-bottom:0">
+          <div>
+            <div class="report-row"><span>Total Distance</span><span class="rval" id="r-dist">2,418 km</span><span class="rdelta" id="r-dist-d">↑ 8%</span></div>
+            <div class="report-row"><span>Energy Consumed</span><span class="rval" id="r-energy">512 kWh</span><span class="rdelta" id="r-energy-d">↑ 5%</span></div>
+            <div class="report-row"><span>Active Drivers</span><span class="rval" id="r-drv">31</span><span class="rdelta" id="r-drv-d">↑ 3</span></div>
+          </div>
+          <div>
+            <div class="report-row"><span>Charging Sessions</span><span class="rval" id="r-sess">24</span><span class="rdelta" id="r-sess-d">↑ 2</span></div>
+            <div class="report-row"><span>Avg Battery Level</span><span class="rval" id="r-batt">64%</span><span class="rdelta neg" id="r-batt-d">↓ 4%</span></div>
+            <div class="report-row"><span>Fleet Efficiency</span><span class="rval" id="r-eff">4.7 km/kWh</span><span class="rdelta" id="r-eff-d">↑ 0.2</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Energy Consumption Bar Chart</div>
+        <div class="bar-chart" id="report-chart" style="height:110px;"></div>
+        <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+          <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SETTINGS ═══════════════ -->
+    <div class="section" id="sec-settings">
+      <div class="topbar"><h2>System <span>Settings</span></h2></div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">👤 Admin Profile</div>
+          <div class="form-group"><label class="form-label">Full Name / ID</label><input class="form-input" id="admin-name" value="Sarah Admin"/></div>
+          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="admin-email" value="sarah@evfleet.com"/></div>
+          <div class="form-group"><label class="form-label">Role</label><input class="form-input" value="System Administrator" readonly/></div>
+          <button class="action-btn green" style="width:100%;padding:.6rem" onclick="saveAdminProfile()">Save Changes</button>
+        </div>
+        <div class="card">
+          <div class="card-title">⚙️ System Preferences</div>
+          <div class="settings-row"><span>Email Alerts</span>
+            <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Email alerts')"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          <div class="settings-row"><span>Auto Reports (Daily)</span>
+            <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Auto reports')"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          <div class="settings-row"><span>Maintenance Warnings</span>
+            <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Maintenance warnings')"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          <div class="settings-row"><span>GPS Fleet Tracking</span>
+            <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'GPS tracking')"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          <div class="settings-row" style="border:none"><span>Driver Activity Logs</span>
+            <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Activity logs')"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ REVENUE ═══════════════ -->
+    <div class="section" id="sec-revenue">
+      <div class="topbar">
+        <h2>Fleet <span>Revenue</span></h2>
+        <button class="action-btn green" onclick="exportSectionToPDF('sec-revenue','revenue-report.pdf')">Export PDF</button>
+      </div>
+
+      <!-- TOTAL REVENUE STAT CARDS -->
+      <div class="grid-4">
+        <div class="card stat-card" onclick="showModal('Total Revenue','Fleet total revenue from all trips and charging.\nCalculated across all 48 vehicles.\nGrowth: ↑ 14% vs last month.')">
+          <div class="stat-icon">💰</div>
+          <div class="stat-value green">₹4,82,600</div>
+          <div class="stat-label">Total Revenue</div>
+          <div class="stat-delta">↑ 14% this month</div>
+        </div>
+        <div class="card stat-card" onclick="showModal('Trip Revenue','Revenue earned from passenger trips.\n31 active drivers contributing.\nAvg per driver: ₹12,480/month.')">
+          <div class="stat-icon">🚗</div>
+          <div class="stat-value blue">₹3,86,880</div>
+          <div class="stat-label">Trip Revenue</div>
+          <div class="stat-delta">↑ 11% vs last month</div>
+        </div>
+        <div class="card stat-card" onclick="showModal('Charging Revenue','Revenue from charging station usage.\n4 stations · 42 ports total.\nAvg ₹15/kWh · 512 kWh/day.')">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-value orange">₹95,720</div>
+          <div class="stat-label">Charging Revenue</div>
+          <div class="stat-delta">↑ 22% vs last month</div>
+        </div>
+        <div class="card stat-card" onclick="showModal('Net Profit','Total Revenue: ₹4,82,600\nOperating Costs: ₹1,94,400\nNet Profit: ₹2,88,200\nProfit Margin: 59.7%')">
+          <div class="stat-icon">📈</div>
+          <div class="stat-value purple">₹2,88,200</div>
+          <div class="stat-label">Net Profit</div>
+          <div class="stat-delta">Margin: 59.7%</div>
+        </div>
+      </div>
+
+      <!-- REVENUE CHART + BREAKDOWN -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title">📊 Monthly Revenue Trend (₹)</div>
+            <div style="display:flex;gap:.4rem;">
+              <button class="rtab active" onclick="switchRevTab(this,'monthly')" style="padding:.25rem .7rem;border-radius:2rem;font-size:.68rem;cursor:pointer;border:1px solid var(--border);color:var(--muted);background:none;font-family:inherit;">Monthly</button>
+              <button class="rtab" onclick="switchRevTab(this,'weekly')" style="padding:.25rem .7rem;border-radius:2rem;font-size:.68rem;cursor:pointer;border:1px solid var(--border);color:var(--muted);background:none;font-family:inherit;">Weekly</button>
+            </div>
+          </div>
+          <div class="bar-chart" id="rev-chart" style="height:120px;"></div>
+          <div id="rev-chart-labels" style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+            <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🍩 Revenue Breakdown</div>
+          <div style="display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;">
+            <svg width="110" height="110" viewBox="0 0 110 110" style="flex-shrink:0;">
+              <circle cx="55" cy="55" r="40" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="18"/>
+              <!-- Trips 80% -->
+              <circle cx="55" cy="55" r="40" fill="none" stroke="var(--blue)" stroke-width="18"
+                stroke-dasharray="201 50" stroke-dashoffset="251" transform="rotate(-90 55 55)"/>
+              <!-- Charging 20% -->
+              <circle cx="55" cy="55" r="40" fill="none" stroke="var(--orange)" stroke-width="18"
+                stroke-dasharray="50 201" stroke-dashoffset="50" transform="rotate(-90 55 55)"/>
+              <text x="55" y="51" text-anchor="middle" fill="var(--text)" font-size="11" font-weight="700">₹4.8L</text>
+              <text x="55" y="63" text-anchor="middle" fill="var(--muted)" font-size="7.5">total</text>
+            </svg>
+            <div style="display:flex;flex-direction:column;gap:.6rem;">
+              <div style="display:flex;align-items:center;gap:.6rem;font-size:.8rem;cursor:pointer;" onclick="showModal('Trip Revenue Breakdown','Trips contribute 80.2% of total revenue.\nTotal: ₹3,86,880\n31 active drivers · 712 trips this month\nAvg trip value: ₹543')">
+                <div style="width:10px;height:10px;border-radius:50%;background:var(--blue);flex-shrink:0;"></div>
+                <span>Trips <strong style="color:var(--blue)">80.2%</strong></span>
+              </div>
+              <div style="display:flex;align-items:center;gap:.6rem;font-size:.8rem;cursor:pointer;" onclick="showModal('Charging Revenue Breakdown','Charging contributes 19.8% of total revenue.\nTotal: ₹95,720\n4 stations · 1,820 sessions this month\nAvg session value: ₹52.6')">
+                <div style="width:10px;height:10px;border-radius:50%;background:var(--orange);flex-shrink:0;"></div>
+                <span>Charging <strong style="color:var(--orange)">19.8%</strong></span>
+              </div>
+              <div style="margin-top:.4rem;padding:.5rem .8rem;background:var(--green-dim);border:1px solid rgba(0,255,136,.25);border-radius:.6rem;font-size:.75rem;">
+                <div style="color:var(--muted);">Best Day</div>
+                <div style="font-weight:700;color:var(--green);">Thursday · ₹28,400</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PER-DRIVER REVENUE TABLE -->
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">👥 Revenue Per Driver — This Month</div>
+          <input id="rev-driver-search" placeholder="Search driver…"
+            style="background:rgba(0,212,255,.05);border:1px solid var(--border);border-radius:.5rem;
+            padding:.32rem .7rem;color:var(--text);font-size:.76rem;outline:none;width:150px;"
+            oninput="filterRevDrivers(this.value)"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Driver ID</th><th>Name</th><th>Vehicle</th>
+              <th>Trips</th><th>Trip Income</th><th>Charging Cost</th><th>Net Earnings</th><th>Status</th>
+            </tr></thead>
+            <tbody id="rev-driver-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DAILY REVENUE BREAKDOWN -->
+      <div class="card" style="margin-top:1.4rem;">
+        <div class="card-title">📅 Daily Revenue — This Week</div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr>
+              <th>Day</th><th>Trip Revenue</th><th>Charging Revenue</th><th>Total</th><th>Drivers Active</th><th>Trips</th>
+            </tr></thead>
+            <tbody id="daily-rev-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════ BATTERY MONITORING ═══════ -->
+    <div class="section" id="sec-battery">
+      <div class="topbar"><h2>Battery <span>Monitoring</span></h2></div>
+
+      <div class="grid-4">
+        <div class="card stat-card"><div class="stat-icon">🔋</div><div class="stat-value green">67%</div><div class="stat-label">Fleet Avg Battery</div><div class="stat-delta">48 vehicles</div></div>
+        <div class="card stat-card" onclick="showModal('Healthy Batteries','38 vehicles with battery > 20%.\nAll cleared for duty.\nAvg SOH: 94%')"><div class="stat-icon">✅</div><div class="stat-value green">38</div><div class="stat-label">Healthy (&gt;20%)</div><div class="stat-delta">Ready for duty</div></div>
+        <div class="card stat-card" onclick="showModal('Low Battery Alert','7 vehicles below 20% battery.\nImmediate charging required.\nVehicles: EV-2940, EV-3011, EV-3044, EV-3045, EV-4005, EV-4012, EV-4019')"><div class="stat-icon">⚠️</div><div class="stat-value red" id="low-batt-count">7</div><div class="stat-label">Low Battery (&lt;20%)</div><div class="stat-delta red">Charge immediately</div></div>
+        <div class="card stat-card"><div class="stat-icon">🏥</div><div class="stat-value blue">94%</div><div class="stat-label">Avg Battery Health</div><div class="stat-delta">SOH across fleet</div></div>
+      </div>
+
+      <!-- PER-VEHICLE BATTERY TABLE -->
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">🔋 Fleet Battery Status</div>
+          <input placeholder="Search vehicle…" id="batt-search"
+            style="background:rgba(0,212,255,.05);border:1px solid var(--border);border-radius:.5rem;
+            padding:.32rem .7rem;color:var(--text);font-size:.76rem;outline:none;width:150px;"
+            oninput="filterBattTable(this.value)"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Vehicle ID</th><th>Driver</th><th>Brand</th><th>Battery %</th><th>Health (SOH)</th>
+              <th>Capacity (kWh)</th><th>Status</th><th>Warning</th>
+            </tr></thead>
+            <tbody id="batt-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ VEHICLE PERFORMANCE TABLE ═══════ -->
+    <div class="section" id="sec-vehicles">
+      <div class="topbar">
+        <h2>Vehicle <span>Performance</span></h2>
+        <button class="action-btn green" onclick="exportSectionToPDF('sec-vehicles','vehicle-report.pdf')">Export</button>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">🚗 All Vehicles — Performance Data</div>
+          <input placeholder="Search…" id="veh-search"
+            style="background:rgba(0,212,255,.05);border:1px solid var(--border);border-radius:.5rem;
+            padding:.32rem .7rem;color:var(--text);font-size:.76rem;outline:none;width:150px;"
+            oninput="filterVehTable(this.value)"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Vehicle ID</th><th>Driver</th><th>Brand</th><th>Speed</th>
+              <th>City/Highway</th><th>Motor Spec</th><th>Engine kWh</th>
+              <th>Weight (kg)</th><th>Overspeed</th><th>Status</th>
+            </tr></thead>
+            <tbody id="veh-perf-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ CHARGING ANALYTICS ═══════ -->
+    <div class="section" id="sec-charging-analytics">
+      <div class="topbar"><h2>Charging <span>Analytics</span></h2>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <button class="action-btn" onclick="openChargingCinematicAdmin()">Cinematic</button>
+        </div>
+      </div>
+
+      <div class="grid-4">
+        <div class="card stat-card"><div class="stat-icon">⚡</div><div class="stat-value blue">24</div><div class="stat-label">Sessions Today</div><div class="stat-delta">↑ 2 vs yesterday</div></div>
+        <div class="card stat-card"><div class="stat-icon">💰</div><div class="stat-value green">₹12,480</div><div class="stat-label">Charging Revenue</div><div class="stat-delta">Today</div></div>
+        <div class="card stat-card"><div class="stat-icon">🔋</div><div class="stat-value orange">512 kWh</div><div class="stat-label">Energy Dispensed</div><div class="stat-delta">Today</div></div>
+        <div class="card stat-card"><div class="stat-icon">⏱️</div><div class="stat-value purple">1h 48m</div><div class="stat-label">Avg Session Time</div><div class="stat-delta">All stations</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">💰 Charging Cost Trend — This Week</div>
+          <div class="bar-chart" id="charge-cost-chart" style="height:110px;"></div>
+          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🔌 Charging Status by Station</div>
+          <div style="display:flex;flex-direction:column;gap:.7rem;" id="charge-status-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⚡ Charging Sessions Log</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Time</th><th>Vehicle ID</th><th>Driver</th><th>Station</th>
+              <th>kWh</th><th>Cost</th><th>Duration</th><th>Status</th>
+            </tr></thead>
+            <tbody id="charge-log-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ MAINTENANCE & ALERTS ═══════ -->
+    <div class="section" id="sec-maintenance">
+      <div class="topbar"><h2>Maintenance <span>&amp; Alerts</span></h2>
+        <button class="action-btn red" onclick="dismissAllMaint()">Clear All</button>
+      </div>
+
+      <div class="grid-4">
+        <div class="card stat-card"><div class="stat-icon">🔴</div><div class="stat-value red" id="maint-critical">3</div><div class="stat-label">Critical</div><div class="stat-delta">Immediate action</div></div>
+        <div class="card stat-card"><div class="stat-icon">🟡</div><div class="stat-value orange" id="maint-warn">5</div><div class="stat-label">Warnings</div><div class="stat-delta">Monitor closely</div></div>
+        <div class="card stat-card"><div class="stat-icon">🔵</div><div class="stat-value blue">4</div><div class="stat-label">Scheduled</div><div class="stat-delta">This week</div></div>
+        <div class="card stat-card"><div class="stat-icon">✅</div><div class="stat-value green">36</div><div class="stat-label">All Clear</div><div class="stat-delta">No issues</div></div>
+      </div>
+
+      <!-- ALERT CARDS -->
+      <div class="card" style="margin-bottom:1.4rem;">
+        <div class="card-title-row">
+          <div class="card-title">🚨 Active Alerts</div>
+          <span class="pill-small red" id="maint-alert-count">3 Critical</span>
+        </div>
+        <div id="maint-alerts-list" style="display:flex;flex-direction:column;gap:.7rem;"></div>
+      </div>
+
+      <!-- MAINTENANCE TABLE -->
+      <div class="card">
+        <div class="card-title">🔧 Maintenance Schedule & Breakdown Log</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Vehicle ID</th><th>Driver</th><th>Type</th><th>Due Date</th>
+              <th>Breakdown</th><th>Overspeed</th><th>Priority</th><th>Action</th>
+            </tr></thead>
+            <tbody id="maint-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="modal-close" onclick="closeModalDirect()">Close</button>
+      <button class="modal-action" id="modal-action-btn" style="display:none" onclick="modalActionFn()">Action</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- PDF Spinner Overlay -->
+<div id="pdf-spinner" style="display:none;position:fixed;inset:0;z-index:1300;align-items:center;justify-content:center;background:rgba(0,0,0,.6)"> 
+  <div style="background:#fff;padding:18px 22px;border-radius:8px;display:flex;flex-direction:column;align-items:center;gap:10px;min-width:260px">
+    <div style="width:48px;height:48px;border-radius:50%;border:6px solid #e6f7f0;border-top-color:#00a884;animation:spin .9s linear infinite"></div>
+    <div style="font-weight:700;color:#0b2b24">Preparing PDF…</div>
+    <div style="font-size:12px;color:#666;text-align:center">This may take a few seconds for long reports.</div>
+  </div>
+</div>
+
+<style>@keyframes spin{to{transform:rotate(360deg)}}#pdf-spinner{display:flex}</style>
+
+<!-- CINEMATIC OVERLAY (admin) -->
+<div id="cinema-overlay-admin" onclick="closeChargingCinematicAdmin()">
+  <div class="cinema-stage-admin" onclick="event.stopPropagation()">
+    <button class="cinema-close-admin" onclick="closeChargingCinematicAdmin()">✕ Close</button>
+    <canvas id="cinema-canvas-admin"></canvas>
+    <div class="cinema-battery-admin" aria-hidden="true">
+      <svg viewBox="0 0 120 240" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="liqGradAdmin" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#00ffcc" stop-opacity=".95"/>
+            <stop offset="100%" stop-color="#0059ff" stop-opacity=".85"/>
+          </linearGradient>
+          <mask id="fillMaskAdmin"><rect id="maskRectAdmin" x="0" y="0" width="120" height="240" fill="#fff"/></mask>
+        </defs>
+        <rect x="8" y="16" width="104" height="200" rx="10" ry="10" fill="rgba(255,255,255,.02)" stroke="rgba(255,255,255,.04)" stroke-width="1.2"/>
+        <g mask="url(#fillMaskAdmin)">
+          <rect x="10" y="20" width="100" height="200" fill="url(#liqGradAdmin)" />
+          <g id="bubblesAdmin" opacity=".85"></g>
+        </g>
+        <rect x="8" y="16" width="104" height="200" rx="10" ry="10" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+        <rect x="44" y="0" width="32" height="8" rx="2" fill="rgba(255,255,255,.06)" />
+      </svg>
+    </div>
+    <div class="cinema-hud-admin">
+      <div>Charging…</div>
+      <div class="val" id="cinema-batt-val-admin">78%</div>
+      <div style="margin-top:.6rem;color:var(--muted)">Estimated finish: <span id="cinema-finish-admin">2h 10m</span></div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/admin-dashboard.js"></script>
+</body>
+</html>
