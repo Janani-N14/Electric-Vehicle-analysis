@@ -183,6 +183,7 @@ def seed_database(db: Session):
             "battery_health": float(row["Battery Health"]),
             "battery_stress": int(row["Battery Stress"]),
             "estimated_range": float(row["Estimated Range Km"]),
+            "city_highway": int(row["City Highway"]),
             "latitude": lat,
             "longitude": lng
         })

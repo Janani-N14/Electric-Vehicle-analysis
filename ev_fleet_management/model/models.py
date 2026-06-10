@@ -103,6 +103,7 @@ class TelemetryModel(Base):
     estimated_range = Column(Float)
     latitude = Column(Float)
     longitude = Column(Float)
+    city_highway = Column(Integer, default=0)
 
 
 # ==========================================

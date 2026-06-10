@@ -1,0 +1,435 @@
+diff --git a/templates/driver-dashboard.html b/templates/driver-dashboard.html
+index 586c28a..d478ac5 100644
+--- a/templates/driver-dashboard.html
++++ b/templates/driver-dashboard.html
+@@ -5,6 +5,7 @@
+   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+   <title>Driver Dashboard · EV Analysis System</title>
+   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
++  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+   <style>
+     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+     :root{
+@@ -607,20 +608,58 @@
+           <button class="action-btn green" style="width:100%;margin-top:1rem;padding:.55rem;" onclick="openServiceBooking()">Book Service Appointment</button>
+         </div>
+       </div>
++      <div class="card" style="margin-top: 1rem;">
++        <div class="card-title-row">
++          <div class="card-title">📈 Battery SOH & Range History</div>
++          <div style="display:flex;gap:.45rem;align-items:center;">
++            <input id="veh-from" type="date" style="padding:.35rem .5rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit" />
++            <input id="veh-to" type="date" style="padding:.35rem .5rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit" />
++            <button class="action-btn" onclick="initVehiclePage()">Filter</button>
++          </div>
++        </div>
++        <div style="height:220px;position:relative;">
++          <canvas id="vehicle-health-chart"></canvas>
++        </div>
++      </div>
+     </div>
+ 
+     <!-- ═══════════════ TRIPS SECTION ═══════════════ -->
+     <div class="section" id="sec-trips">
+       <div class="topbar"><h2>Trip <span>History</span></h2></div>
++      
++      <!-- Filters -->
++      <div class="card" style="margin-bottom:1rem;padding:.8rem;">
++        <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
++          <span style="font-size:.78rem;font-weight:700;color:var(--muted)">Filters:</span>
++          <input id="trips-from" type="date" style="padding:.35rem .5rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit" />
++          <input id="trips-to" type="date" style="padding:.35rem .5rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit" />
++          <select id="trips-route" style="padding:.36rem .6rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit">
++            <option value="All">All Routes</option>
++            <option value="City">City Only</option>
++            <option value="Highway">Highway Only</option>
++          </select>
++          <button class="action-btn" onclick="initTrips()">Apply Filter</button>
++        </div>
++      </div>
++
+       <div class="card" style="margin-bottom:1.4rem;">
+-        <div class="card-title">📊 Weekly Summary</div>
++        <div class="card-title">📊 Filtered Summary</div>
+         <div class="grid-4">
+-          <div class="stat-card"><div class="stat-icon">📍</div><div class="stat-value blue">342 km</div><div class="stat-label">This Week</div></div>
+-          <div class="stat-card"><div class="stat-icon">🕐</div><div class="stat-value green">6h 18m</div><div class="stat-label">Drive Time</div></div>
+-          <div class="stat-card"><div class="stat-icon">⚡</div><div class="stat-value orange">72.6 kWh</div><div class="stat-label">Energy Used</div></div>
+-          <div class="stat-card"><div class="stat-icon">💚</div><div class="stat-value purple">4.7 km/kWh</div><div class="stat-label">Avg Efficiency</div></div>
++          <div class="stat-card"><div class="stat-icon">📍</div><div class="stat-value blue" id="trips-stat-dist">-- km</div><div class="stat-label">Total Distance</div></div>
++          <div class="stat-card"><div class="stat-icon">🕐</div><div class="stat-value green" id="trips-stat-time">-- h</div><div class="stat-label">Drive Time</div></div>
++          <div class="stat-card"><div class="stat-icon">⚡</div><div class="stat-value orange" id="trips-stat-energy">-- kWh</div><div class="stat-label">Energy Used</div></div>
++          <div class="stat-card"><div class="stat-icon">💚</div><div class="stat-value purple" id="trips-stat-eff">-- km/kWh</div><div class="stat-label">Avg Efficiency</div></div>
+         </div>
+       </div>
++
++      <!-- Chart -->
++      <div class="card" style="margin-bottom:1.4rem;">
++        <div class="card-title">📈 Distance and Energy Efficiency per Trip</div>
++        <div style="height:220px;position:relative;">
++          <canvas id="trips-chart"></canvas>
++        </div>
++      </div>
++
+       <div class="card">
+         <div class="card-title">🗺️ Recent Trips</div>
+         <div style="overflow-x:auto;">
+@@ -645,10 +684,10 @@
+     <div class="section" id="sec-charging">
+       <div class="topbar"><h2>Charging <span>History</span></h2></div>
+       <div class="grid-4" style="margin-bottom:1.4rem;">
+-        <div class="card stat-card"><div class="stat-icon">⚡</div><div class="stat-value blue">142</div><div class="stat-label">Total Sessions</div></div>
+-        <div class="card stat-card"><div class="stat-icon">🔋</div><div class="stat-value green">5,840 kWh</div><div class="stat-label">Total Energy</div></div>
+-        <div class="card stat-card"><div class="stat-icon">💰</div><div class="stat-value orange">₹14,200</div><div class="stat-label">Total Cost</div></div>
+-        <div class="card stat-card"><div class="stat-icon">🕐</div><div class="stat-value purple">284h</div><div class="stat-label">Charging Time</div></div>
++        <div class="card stat-card"><div class="stat-icon">⚡</div><div class="stat-value blue" id="chg-stat-sessions">--</div><div class="stat-label">Total Sessions</div></div>
++        <div class="card stat-card"><div class="stat-icon">🔋</div><div class="stat-value green" id="chg-stat-energy">-- kWh</div><div class="stat-label">Total Energy</div></div>
++        <div class="card stat-card"><div class="stat-icon">💰</div><div class="stat-value orange" id="chg-stat-cost">₹--</div><div class="stat-label">Total Cost</div></div>
++        <div class="card stat-card"><div class="stat-icon">🕐</div><div class="stat-value purple" id="chg-stat-time">--h</div><div class="stat-label">Charging Time</div></div>
+       </div>
+       <div class="card">
+         <div class="card-title-row">
+@@ -663,7 +702,7 @@
+               <option value="Tesla SC">Tesla SC</option>
+               <option value="Home">Home</option>
+             </select>
+-            <button class="action-btn" onclick="applyChargingFilters()">Filter</button>
++            <button class="action-btn" onclick="initCharging()">Filter</button>
+             <button class="action-btn green" onclick="exportChargingCSV()">Export</button>
+             <button class="action-btn" onclick="openChargingCinematic()">Cinematic</button>
+           </div>
+@@ -672,7 +711,9 @@
+         <div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
+           <div style="flex:1;min-width:220px;">
+             <div class="card-title">Energy by Type</div>
+-            <div id="charging-chart" style="height:140px;padding:.6rem 0;"></div>
++            <div style="height:180px;position:relative;">
++              <canvas id="charging-doughnut-chart"></canvas>
++            </div>
+           </div>
+ 
+           <div style="flex:2;min-width:380px;">
+@@ -701,6 +742,24 @@
+     <div class="section" id="sec-stations">
+       <div class="topbar"><h2>Nearby <span>Stations</span></h2></div>
+ 
++      <!-- Filters -->
++      <div class="card" style="margin-bottom:1rem;padding:.8rem;">
++        <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
++          <span style="font-size:.78rem;font-weight:700;color:var(--muted)">Filters:</span>
++          <select id="station-type" style="padding:.36rem .6rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit">
++            <option value="All">All Charger Types</option>
++            <option value="AC">AC Only</option>
++            <option value="Fast DC">Fast DC Only</option>
++            <option value="Tesla SC">Tesla SC Only</option>
++          </select>
++          <select id="station-status" style="padding:.36rem .6rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit">
++            <option value="All">All Status</option>
++            <option value="Available">Only Available (>= 1 Port)</option>
++          </select>
++          <button class="action-btn" onclick="initStations()">Apply Filter</button>
++        </div>
++      </div>
++
+       <!-- FULL MAP -->
+       <div class="map-box" style="height:420px;margin-bottom:1.4rem;">
+         <div id="full-map" style="height:100%;width:100%;"></div>
+@@ -730,28 +789,31 @@
+           <button class="action-btn green" style="width:100%;padding:.6rem;" onclick="saveProfile()">Save Changes</button>
+         </div>
+         <div class="card">
+-          <div class="card-title">🔔 Preferences</div>
+-          <div class="settings-row">
++          <div class="card-title-row">
++            <div class="card-title">🔔 Preferences</div>
++            <input id="settings-search" placeholder="Search settings..." oninput="filterSettings()" style="padding:.25rem .6rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-size:.75rem;outline:none;" />
++          </div>
++          <div class="settings-row preference-item">
+             <span>Battery Low Alerts</span>
+             <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Battery alerts')">
+               <div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+           </div>
+-          <div class="settings-row">
++          <div class="settings-row preference-item">
+             <span>Charging Complete Notify</span>
+             <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Charging notifications')">
+               <div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+           </div>
+-          <div class="settings-row">
++          <div class="settings-row preference-item">
+             <span>Trip Summary Email</span>
+             <label class="toggle"><input type="checkbox" onchange="prefToggle(this,'Trip summary emails')">
+               <div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+           </div>
+-          <div class="settings-row">
++          <div class="settings-row preference-item">
+             <span>Dark Mode</span>
+             <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'Dark mode')">
+               <div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+           </div>
+-          <div class="settings-row" style="border:none">
++          <div class="settings-row preference-item" style="border:none">
+             <span>GPS Tracking</span>
+             <label class="toggle"><input type="checkbox" checked onchange="prefToggle(this,'GPS tracking')">
+               <div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+@@ -764,32 +826,47 @@
+     <div class="section" id="sec-income">
+       <div class="topbar">
+         <h2>My <span>Income</span></h2>
+-        <button class="action-btn green" onclick="showToast('📥 Income report downloaded!')">Export</button>
++        <button class="action-btn green" onclick="exportIncomeCSV()">Export</button>
++      </div>
++
++      <!-- Filters -->
++      <div class="card" style="margin-bottom:1rem;padding:.8rem;">
++        <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
++          <span style="font-size:.78rem;font-weight:700;color:var(--muted)">Filters:</span>
++          <input id="income-from" type="date" style="padding:.35rem .5rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit" />
++          <input id="income-to" type="date" style="padding:.35rem .5rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit" />
++          <select id="income-route" style="padding:.36rem .6rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit">
++            <option value="All">All Routes</option>
++            <option value="City">City Only</option>
++            <option value="Highway">Highway Only</option>
++          </select>
++          <button class="action-btn" onclick="initIncome()">Apply Filter</button>
++        </div>
+       </div>
+ 
+       <!-- INCOME STAT CARDS -->
+       <div class="grid-4">
+-        <div class="card stat-card" onclick="showModal('Total Trip Income','Total earnings from all trips this month.\n47 trips completed · Avg ₹543/trip.\nBest day: Thursday ₹2,840.')">
++        <div class="card stat-card" onclick="showModal('Total Trip Income','Earnings from all completed trips.')">
+           <div class="stat-icon">💰</div>
+-          <div class="stat-value green">₹25,521</div>
++          <div class="stat-value green" id="income-stat-total">₹--</div>
+           <div class="stat-label">Total Trip Income</div>
+-          <div class="stat-delta">↑ 9% this month</div>
++          <div class="stat-delta">Based on selection</div>
+         </div>
+-        <div class="card stat-card" onclick="showModal('Today\'s Earnings','3 trips completed today.\nTrip 1 (34 km): ₹680\nTrip 2 (31 km): ₹620\nTrip 3 (22 km): ₹440\nTotal today: ₹1,740')">
++        <div class="card stat-card" onclick="showModal('Today\'s Earnings','Average earnings computed from active trips.')">
+           <div class="stat-icon">📅</div>
+-          <div class="stat-value blue">₹1,740</div>
+-          <div class="stat-label">Today's Earnings</div>
+-          <div class="stat-delta">3 trips · 87 km</div>
++          <div class="stat-value blue" id="income-stat-today">₹--</div>
++          <div class="stat-label">Avg Earnings</div>
++          <div class="stat-delta">per trip</div>
+         </div>
+-        <div class="card stat-card" onclick="showModal('Charging Cost','Charging cost deducted from earnings.\nThis month: ₹356\nToday: ₹22\nNet after charging: ₹25,165')">
++        <div class="card stat-card" onclick="showModal('Charging Cost','Total charging cost deducted.')">
+           <div class="stat-icon">⚡</div>
+-          <div class="stat-value orange">₹356</div>
++          <div class="stat-value orange" id="income-stat-charging">₹--</div>
+           <div class="stat-label">Charging Cost</div>
+           <div class="stat-delta">Deducted from earnings</div>
+         </div>
+-        <div class="card stat-card" onclick="showModal('Net Earnings','Trip Income: ₹25,521\nCharging Cost: -₹356\nNet Earnings: ₹25,165\nEfficiency bonus: +₹800 (top 10%).')">
++        <div class="card stat-card" onclick="showModal('Net Earnings','Trip Income minus Charging cost.')">
+           <div class="stat-icon">📈</div>
+-          <div class="stat-value purple">₹25,165</div>
++          <div class="stat-value purple" id="income-stat-net">₹--</div>
+           <div class="stat-label">Net Earnings</div>
+           <div class="stat-delta">After deductions</div>
+         </div>
+@@ -798,10 +875,9 @@
+       <!-- INCOME CHART + BREAKDOWN -->
+       <div class="grid-2">
+         <div class="card">
+-          <div class="card-title">📊 Weekly Earnings (₹)</div>
+-          <div class="bar-chart" id="income-chart" style="height:110px;"></div>
+-          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
+-            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
++          <div class="card-title">📊 Earnings Trend (₹)</div>
++          <div style="height:190px;position:relative;">
++            <canvas id="income-canvas-chart"></canvas>
+           </div>
+         </div>
+ 
+@@ -810,27 +886,27 @@
+           <div style="display:flex;flex-direction:column;gap:0;">
+             <div class="settings-row">
+               <span>Best Trip</span>
+-              <strong style="color:var(--green)">₹980 · 49 km</strong>
++              <strong style="color:var(--green)" id="inc-high-trip">₹--</strong>
+             </div>
+             <div class="settings-row">
+               <span>Best Day</span>
+-              <strong style="color:var(--blue)">Thu · ₹2,840</strong>
++              <strong style="color:var(--blue)" id="inc-high-day">--</strong>
+             </div>
+             <div class="settings-row">
+               <span>Avg per Trip</span>
+-              <strong>₹543</strong>
++              <strong id="inc-high-avgtrip">₹--</strong>
+             </div>
+             <div class="settings-row">
+               <span>Avg per km</span>
+-              <strong>₹20.1</strong>
++              <strong id="inc-high-avgkm">₹--</strong>
+             </div>
+             <div class="settings-row">
+-              <span>Efficiency Bonus</span>
+-              <strong style="color:var(--green)">+₹800</strong>
++              <span>Safety Score</span>
++              <strong style="color:var(--green)" id="inc-high-bonus">--</strong>
+             </div>
+             <div class="settings-row" style="border:none">
+               <span>Rank in Fleet</span>
+-              <strong style="color:var(--orange)">#3 of 48 🏅</strong>
++              <strong style="color:var(--orange)" id="inc-high-rank">#1 🏅</strong>
+             </div>
+           </div>
+         </div>
+@@ -855,31 +931,46 @@
+     <div class="section" id="sec-performance">
+       <div class="topbar"><h2>Daily <span>Performance</span></h2></div>
+ 
++      <!-- Filters -->
++      <div class="card" style="margin-bottom:1rem;padding:.8rem;">
++        <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
++          <span style="font-size:.78rem;font-weight:700;color:var(--muted)">Filters:</span>
++          <input id="perf-from" type="date" style="padding:.35rem .5rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit" />
++          <input id="perf-to" type="date" style="padding:.35rem .5rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit" />
++          <select id="perf-route" style="padding:.36rem .6rem;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit">
++            <option value="All">All Routes</option>
++            <option value="City">City Only</option>
++            <option value="Highway">Highway Only</option>
++          </select>
++          <button class="action-btn" onclick="initPerformance()">Apply Filter</button>
++        </div>
++      </div>
++
+       <!-- LIVE STATUS ROW -->
+       <div class="grid-4">
+-        <div class="card stat-card" onclick="showModal('Working Status','Current status: On Duty\nShift started: 06:00 AM\nHours logged: 4h 32m\nNext break due: 30 min')">
++        <div class="card stat-card" onclick="showModal('Working Status','Live status of driver')">
+           <div class="stat-icon">🟢</div>
+           <div class="stat-value green" id="perf-status">On Duty</div>
+           <div class="stat-label">Working Status</div>
+           <div class="stat-delta">Since 06:00 AM</div>
+         </div>
+-        <div class="card stat-card" onclick="showModal('Current Speed','Live speed: 54 km/h\nSpeed limit: 80 km/h\nStatus: Safe\nNo violations today.')">
++        <div class="card stat-card" onclick="showModal('Current Speed','Live simulated speed')">
+           <div class="stat-icon">🚀</div>
+-          <div class="stat-value blue" id="perf-speed">54 km/h</div>
++          <div class="stat-value blue" id="perf-speed">-- km/h</div>
+           <div class="stat-label">Current Speed</div>
+-          <div class="stat-delta" id="perf-speed-status">Within limit ✓</div>
++          <div class="stat-delta" id="perf-speed-status">Safe ✓</div>
+         </div>
+-        <div class="card stat-card" onclick="showModal('Distance Today','Total: 87 km across 3 trips\nMorning: 34 km\nAfternoon: 31 km\nEvening: 22 km')">
++        <div class="card stat-card" onclick="showModal('Distance','Total distance travelled based on filter selection')">
+           <div class="stat-icon">📍</div>
+-          <div class="stat-value orange">87 km</div>
++          <div class="stat-value orange" id="perf-dist">-- km</div>
+           <div class="stat-label">Distance Travelled</div>
+-          <div class="stat-delta">3 trips today</div>
++          <div class="stat-delta">Based on selection</div>
+         </div>
+-        <div class="card stat-card" onclick="showModal('Overspeed Violations','Today: 0 violations ✓\nThis week: 1 violation\nJun 6 – 94 km/h in 80 zone\nPenalty: ₹200 deducted')">
+-          <div class="stat-icon" id="viol-icon">✅</div>
+-          <div class="stat-value green" id="viol-count">0 Today</div>
+-          <div class="stat-label">Overspeed Violations</div>
+-          <div class="stat-delta" id="viol-delta">1 this week</div>
++        <div class="card stat-card" onclick="showModal('Safety Score','Current safety rating based on violations and harsh events')">
++          <div class="stat-icon" id="viol-icon">🛡️</div>
++          <div class="stat-value green" id="perf-safety">--%</div>
++          <div class="stat-label">Safety Score</div>
++          <div class="stat-delta" id="perf-viol-delta">0 violations</div>
+         </div>
+       </div>
+ 
+@@ -894,19 +985,19 @@
+             <div>
+               <div style="display:flex;justify-content:space-between;font-size:.76rem;margin-bottom:.35rem;">
+                 <span style="color:var(--muted)">State of Charge</span>
+-                <span style="color:var(--green);font-weight:700" id="perf-batt-pct">78%</span>
++                <span style="color:var(--green);font-weight:700" id="perf-batt-pct">--%</span>
+               </div>
+-              <div class="battery-bar-outer"><div class="battery-bar-inner" id="perf-batt-bar" style="width:78%"></div></div>
++              <div class="battery-bar-outer"><div class="battery-bar-inner" id="perf-batt-bar" style="width:0%"></div></div>
+             </div>
+ 
+             <!-- Battery Health -->
+             <div>
+               <div style="display:flex;justify-content:space-between;font-size:.76rem;margin-bottom:.35rem;">
+                 <span style="color:var(--muted)">Battery Health (SOH)</span>
+-                <span style="color:var(--blue);font-weight:700">94%</span>
++                <span style="color:var(--blue);font-weight:700" id="perf-soh">--%</span>
+               </div>
+               <div class="battery-bar-outer">
+-                <div class="battery-bar-inner" style="width:94%;background:linear-gradient(90deg,var(--blue),#0059ff)"></div>
++                <div class="battery-bar-inner" id="perf-soh-bar" style="width:0%;background:linear-gradient(90deg,var(--blue),#0059ff)"></div>
+               </div>
+             </div>
+ 
+@@ -914,16 +1005,16 @@
+             <div class="grid-2" style="margin-bottom:0;gap:.6rem;">
+               <div style="background:rgba(0,212,255,.05);border:1px solid var(--border);border-radius:.6rem;padding:.7rem;">
+                 <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Capacity</div>
+-                <div style="font-size:1.1rem;font-weight:700;color:var(--blue);margin-top:.2rem;">52 kWh</div>
++                <div style="font-size:1.1rem;font-weight:700;color:var(--blue);margin-top:.2rem;" id="perf-capacity">-- kWh</div>
+               </div>
+               <div style="background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.2);border-radius:.6rem;padding:.7rem;">
+                 <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Remaining</div>
+-                <div style="font-size:1.1rem;font-weight:700;color:var(--green);margin-top:.2rem;">40.6 kWh</div>
++                <div style="font-size:1.1rem;font-weight:700;color:var(--green);margin-top:.2rem;" id="perf-remaining">-- kWh</div>
+               </div>
+             </div>
+ 
+             <!-- Low battery warning -->
+-            <div id="batt-warning" style="display:none;background:rgba(255,77,109,.08);border:1px solid rgba(255,77,109,.3);border-radius:.6rem;padding:.6rem .8rem;font-size:.78rem;color:var(--red);">
++            <div id="perf-batt-warning" style="display:none;background:rgba(255,77,109,.08);border:1px solid rgba(255,77,109,.3);border-radius:.6rem;padding:.6rem .8rem;font-size:.78rem;color:var(--red);">
+               ⚠️ Battery below 20% — Please charge immediately!
+             </div>
+           </div>
+@@ -937,12 +1028,12 @@
+             <svg width="130" height="75" viewBox="0 0 140 80">
+               <path d="M10,75 A60,60 0 0,1 130,75" fill="none" stroke="rgba(0,212,255,.12)" stroke-width="10" stroke-linecap="round"/>
+               <path d="M10,75 A60,60 0 0,1 130,75" fill="none" stroke="url(#sGrad)" stroke-width="10" stroke-linecap="round"
+-                stroke-dasharray="188" stroke-dashoffset="95" id="speed-arc"/>
++                stroke-dasharray="188" stroke-dashoffset="188" id="speed-arc"/>
+               <defs><linearGradient id="sGrad" x1="0" y1="0" x2="1" y2="0">
+                 <stop offset="0%" stop-color="#00d4ff"/><stop offset="100%" stop-color="#00ff88"/>
+               </linearGradient></defs>
+             </svg>
+-            <div style="font-size:1.6rem;font-weight:800;color:var(--blue);margin-top:-.3rem;" id="speed-display">54 km/h</div>
++            <div style="font-size:1.6rem;font-weight:800;color:var(--blue);margin-top:-.3rem;" id="speed-display">-- km/h</div>
+             <div style="font-size:.7rem;color:var(--muted);">Speed limit: 80 km/h</div>
+           </div>
+           <!-- Maintenance -->
+@@ -951,15 +1042,31 @@
+               <span>🔧 Maintenance Type</span><strong style="color:var(--green)">Routine Check</strong>
+             </div>
+             <div style="display:flex;align-items:center;justify-content:space-between;padding:.45rem .6rem;background:rgba(255,170,0,.05);border:1px solid rgba(255,170,0,.2);border-radius:.55rem;font-size:.78rem;">
+-              <span>🛠️ Next Service</span><strong style="color:var(--orange)">1,818 km away</strong>
++              <span>🛠️ Next Service</span><strong style="color:var(--orange)" id="perf-next-svc">-- km away</strong>
+             </div>
+             <div style="display:flex;align-items:center;justify-content:space-between;padding:.45rem .6rem;background:rgba(0,212,255,.05);border:1px solid var(--border);border-radius:.55rem;font-size:.78rem;">
+-              <span>⚡ Charging Status</span><strong style="color:var(--blue)">Not Charging</strong>
++              <span>⚡ Charging Status</span><strong style="color:var(--blue)" id="perf-chg-status">Not Charging</strong>
+             </div>
+           </div>
+         </div>
+       </div>
+ 
++      <!-- Performance charts -->
++      <div class="grid-2" style="margin-top: 1rem; margin-bottom: 1rem;">
++        <div class="card">
++          <div class="card-title">📈 Speed & Safety Score Trend</div>
++          <div style="height:220px;position:relative;">
++            <canvas id="perf-speed-chart"></canvas>
++          </div>
++        </div>
++        <div class="card">
++          <div class="card-title">📊 Harsh Driving Events Profile</div>
++          <div style="height:220px;position:relative;">
++            <canvas id="perf-harsh-chart"></canvas>
++          </div>
++        </div>
++      </div>
++
+       <!-- TRIP SUMMARY TABLE -->
+       <div class="card">
+         <div class="card-title">📋 Today's Trip Summary with Income</div>
