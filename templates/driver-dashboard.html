@@ -1265,18 +1265,11 @@ function loadUserSession(){
     });
 }
 function initializeFilterDates(){
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  
-  const firstDay = `${year}-${month}-01`;
-  const lastDay = `${year}-${month}-${String(new Date(year, today.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
-
   const dateIds = ['veh-from', 'veh-to', 'trips-from', 'trips-to', 'perf-from', 'perf-to', 'income-from', 'income-to', 'chg-from', 'chg-to'];
   dateIds.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      el.value = id.endsWith('from') ? firstDay : lastDay;
+      el.value = '';
     }
   });
 }
@@ -1596,6 +1589,10 @@ function initVehiclePage(){
       document.getElementById('veh-stat-soh').textContent = `${data.safety_score}%`;
 
       const charts = data.charts;
+      const vhCtx = document.getElementById('vehicle-health-chart').getContext('2d');
+      const vhGrad = vhCtx.createLinearGradient(0, 0, 0, 220);
+      vhGrad.addColorStop(0, 'rgba(16,185,129,0.4)');
+      vhGrad.addColorStop(1, 'rgba(16,185,129,0.01)');
       renderChart('vehicle-health-chart', {
         type: 'line',
         data: {
@@ -1605,10 +1602,15 @@ function initVehiclePage(){
               label: 'Battery SOH (%)',
               data: charts.health,
               borderColor: '#10b981',
-              backgroundColor: 'rgba(16,185,129,0.1)',
+              backgroundColor: vhGrad,
               yAxisID: 'ySoh',
-              tension: 0.3,
-              fill: true
+              tension: 0.4,
+              fill: true,
+              pointBackgroundColor: '#fff',
+              pointBorderColor: '#10b981',
+              pointBorderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6
             },
             {
               label: 'Avg Range (km)',
@@ -1616,7 +1618,14 @@ function initVehiclePage(){
               borderColor: '#2563eb',
               backgroundColor: 'transparent',
               yAxisID: 'yRange',
-              tension: 0.3
+              tension: 0.4,
+              borderWidth: 2,
+              borderDash: [5, 5],
+              pointBackgroundColor: '#fff',
+              pointBorderColor: '#2563eb',
+              pointBorderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6
             }
           ]
         },
@@ -1711,9 +1720,10 @@ function initTrips(){
               type: 'bar',
               label: 'Distance (km)',
               data: distances,
-              backgroundColor: 'rgba(37,99,235,0.75)',
+              backgroundColor: 'rgba(37,99,235,0.8)',
               borderColor: '#2563eb',
               borderWidth: 1,
+              borderRadius: 6,
               yAxisID: 'yDist'
             },
             {
@@ -1722,9 +1732,14 @@ function initTrips(){
               data: efficiencies,
               borderColor: '#7c3aed',
               backgroundColor: 'transparent',
-              borderWidth: 2,
-              tension: 0.3,
-              yAxisID: 'yEff'
+              borderWidth: 3,
+              tension: 0.4,
+              yAxisID: 'yEff',
+              pointBackgroundColor: '#fff',
+              pointBorderColor: '#7c3aed',
+              pointBorderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6
             }
           ]
         },
@@ -2157,6 +2172,10 @@ function initIncome(){
       document.getElementById('inc-high-rank').textContent = '#2 of 48 🏅';
 
       const charts = data.charts;
+      const incCtx = document.getElementById('income-canvas-chart').getContext('2d');
+      const incGrad = incCtx.createLinearGradient(0, 0, 0, 190);
+      incGrad.addColorStop(0, 'rgba(22,163,74,0.4)');
+      incGrad.addColorStop(1, 'rgba(22,163,74,0.01)');
       renderChart('income-canvas-chart', {
         type: 'line',
         data: {
@@ -2166,9 +2185,14 @@ function initIncome(){
               label: 'Daily Earnings (₹)',
               data: charts.income,
               borderColor: '#16a34a',
-              backgroundColor: 'rgba(22,163,74,0.05)',
-              tension: 0.3,
-              fill: true
+              backgroundColor: incGrad,
+              tension: 0.4,
+              fill: true,
+              pointBackgroundColor: '#fff',
+              pointBorderColor: '#16a34a',
+              pointBorderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6
             }
           ]
         },
@@ -2253,6 +2277,11 @@ function initPerformance(){
 
       const charts = data.charts;
       
+      const speedCtx = document.getElementById('perf-speed-chart').getContext('2d');
+      const safGrad = speedCtx.createLinearGradient(0, 0, 0, 220);
+      safGrad.addColorStop(0, 'rgba(22,163,74,0.4)');
+      safGrad.addColorStop(1, 'rgba(22,163,74,0.01)');
+      
       renderChart('perf-speed-chart', {
         type: 'line',
         data: {
@@ -2262,16 +2291,23 @@ function initPerformance(){
               label: 'Avg Speed (km/h)',
               data: charts.distance.map(() => data.avg_speed || 54),
               borderColor: '#2563eb',
+              borderDash: [5, 5],
               backgroundColor: 'transparent',
-              tension: 0.3
+              tension: 0.4,
+              pointRadius: 0
             },
             {
               label: 'Safety Score (%)',
               data: charts.safety,
               borderColor: '#16a34a',
-              backgroundColor: 'rgba(22,163,74,0.05)',
-              tension: 0.3,
-              fill: true
+              backgroundColor: safGrad,
+              tension: 0.4,
+              fill: true,
+              pointBackgroundColor: '#fff',
+              pointBorderColor: '#16a34a',
+              pointBorderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6
             }
           ]
         },
@@ -2289,17 +2325,20 @@ function initPerformance(){
             {
               label: 'Harsh Braking',
               data: charts.dates.map(() => data.harsh_braking),
-              backgroundColor: '#ea580c'
+              backgroundColor: 'rgba(234, 88, 12, 0.8)',
+              borderRadius: 4
             },
             {
               label: 'Harsh Accel',
               data: charts.dates.map(() => data.harsh_acceleration),
-              backgroundColor: '#7c3aed'
+              backgroundColor: 'rgba(124, 58, 237, 0.8)',
+              borderRadius: 4
             },
             {
               label: 'Overspeeds',
               data: charts.dates.map(() => data.overspeed_violations),
-              backgroundColor: '#dc2626'
+              backgroundColor: 'rgba(220, 38, 38, 0.8)',
+              borderRadius: 4
             }
           ]
         },
