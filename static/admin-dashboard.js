@@ -1323,6 +1323,9 @@ function navigate(section){
   if(section === 'vehicles') initVehiclePerf();
   if(section === 'charging-analytics') initChargingAnalytics();
   if(section === 'maintenance') initMaintenance();
+  if(section === 'model-performance') applyFiltersAndSort();
+  if(section === 'driver-performance') applyFiltersAndSort();
+  if(section === 'violations-analytics') applyFiltersAndSort();
 }
 
 function toggleSidebar(){
@@ -2022,8 +2025,9 @@ function applyFiltersAndSort() {
       let idleCount = 0;
 
       data.vehicles_data.forEach(v => {
-        if (v.status.toLowerCase() === 'active') activeCount++;
-        else if (v.status.toLowerCase() === 'charging') chargingCount++;
+        const statusVal = v.status || 'idle';
+        if (statusVal.toLowerCase() === 'active') activeCount++;
+        else if (statusVal.toLowerCase() === 'charging') chargingCount++;
         else idleCount++;
       });
 

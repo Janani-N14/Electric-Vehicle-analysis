@@ -714,10 +714,12 @@ def get_dashboard_data(
             # monthly income breakdown
             v_df = df_telemetry[df_telemetry['vehicle_id'] == vid]
             m_income = v_df.groupby('mapped_month')['income'].sum().to_dict()
+            status_val = ev_info['status'].values[0] if not ev_info.empty else "Idle"
 
             vehicle_performance.append({
                 "id": vid,
                 "model": model_name,
+                "status": status_val,
                 "revenue": round(rev_val, 2),
                 "charging_cost": round(chg_val, 2),
                 "maintenance_cost": round(maint_val, 2),
