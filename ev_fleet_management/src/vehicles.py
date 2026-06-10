@@ -3,15 +3,25 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 from ev_fleet_management.utils.db import get_db
-from ev_fleet_management.model.models import EVModel, EVCreate, EVOut, TelemetryModel
+from ev_fleet_management.utils.jwt_helper import get_current_user_from_cookie, get_optional_current_user
+from ev_fleet_management.model.models import EVModel, EVCreate, EVOut, TelemetryModel, DriverModel
 from ev_fleet_management.logger import get_logger
 
-logger = get_logger(__name__)
 router = APIRouter(prefix="/api/vehicles", tags=["vehicles"])
 
 @router.get("", response_model=List[EVOut])
-def get_all_vehicles(db: Session = Depends(get_db)):
-    vehicles = db.query(EVModel).all()
+def get_all_vehicles(
+    current_user: dict = Depends(get_optional_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user and current_user.get("role") == "admin":
+        # Get driver IDs managed by this admin
+        managed_drivers = db.query(DriverModel).filter(DriverModel.admin_id == current_user["sub"]).all()
+        managed_vehicle_ids = [d.vehicle_id for d in managed_drivers if d.vehicle_id]
+        vehicles = db.query(EVModel).filter(EVModel.id.in_(managed_vehicle_ids)).all()
+    else:
+        vehicles = db.query(EVModel).all()
+
     for v in vehicles:
         maint_cost = db.query(func.sum(TelemetryModel.maintenance_cost)).filter(TelemetryModel.vehicle_id == v.id).scalar() or 0.0
         v.maintenance_cost = float(maint_cost)

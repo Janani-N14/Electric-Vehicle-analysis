@@ -1481,9 +1481,55 @@ function loadDashboardData() {
     // Populate vehicle selection for forms
     populateVehicleSelect();
 
-    // Render dashboard components
-    renderDriverTable(allDrivers.slice(0, 5), 'dash-driver-table-tbody');
-    renderAlerts('dash-alerts');
+    // Populate driver filter dropdown
+    const driverFilter = document.getElementById('filter-driver');
+    if (driverFilter) {
+      const prevVal = driverFilter.value;
+      driverFilter.innerHTML = '<option value="">All Drivers</option>';
+      allDrivers.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = `${d.id} — ${d.name}`;
+        driverFilter.appendChild(opt);
+      });
+      driverFilter.value = prevVal;
+    }
+
+    // Populate model filter dropdown
+    const modelFilter = document.getElementById('filter-model');
+    if (modelFilter) {
+      const prevVal = modelFilter.value;
+      modelFilter.innerHTML = '<option value="">All Models</option>';
+      const uniqueModels = [...new Set(allVehicles.map(v => v.model))];
+      uniqueModels.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        modelFilter.appendChild(opt);
+      });
+      modelFilter.value = prevVal;
+    }
+    
+    // Populate violations driver select dropdown
+    const vioDriverSelect = document.getElementById('violations-driver-select');
+    if (vioDriverSelect) {
+      const prevVal = vioDriverSelect.value;
+      vioDriverSelect.innerHTML = '';
+      allDrivers.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = `${d.id} — ${d.name}`;
+        vioDriverSelect.appendChild(opt);
+      });
+      if (prevVal && allDrivers.find(d => d.id === prevVal)) {
+        vioDriverSelect.value = prevVal;
+      } else if (allDrivers.length > 0) {
+        vioDriverSelect.value = allDrivers[0].id;
+      }
+    }
+
+    // Apply filters and sort to render the rest of the dashboards
+    applyFiltersAndSort();
   })
   .catch(err => {
     console.error("Error loading dashboard data:", err);
@@ -1570,8 +1616,7 @@ loadUserSession();
 loadDashboardData();
 setInterval(pollLatestTelemetry, 3000);
 
-buildBarChart('energy-chart', energyVals);
-buildTrendLine();
+loadChartsData();
 
 /* ── EXECUTIVE REPORT & VISUALIZATIONS ── */
 let workingGarageChartInstance = null;
@@ -1933,4 +1978,462 @@ function loadDriverViolationsReport(driverId) {
         }
       });
     });
+}
+
+/* ── GLOBAL FILTERING & SORTING ── */
+let modelComparisonChartInstance = null;
+let modelRadarChartInstance = null;
+let driverScoreBarChartInstance = null;
+let driverTrendLineChartInstance = null;
+let violationsLeaderboardChartInstance = null;
+let violationsMonthlyTrendChartInstance = null;
+
+function applyFiltersAndSort() {
+  const year = document.getElementById('filter-year').value;
+  const month = document.getElementById('filter-month').value;
+  const driverId = document.getElementById('filter-driver').value;
+  const model = document.getElementById('filter-model').value;
+  const status = document.getElementById('filter-status').value;
+  const start_date = document.getElementById('filter-start-date').value;
+  const end_date = document.getElementById('filter-end-date').value;
+  const sort_by = document.getElementById('global-sort-by').value;
+  const sort_order = document.getElementById('global-sort-order').value;
+
+  let query = `?sort_by=${sort_by}&sort_order=${sort_order}`;
+  if (year) query += `&year=${year}`;
+  if (month) query += `&month=${month}`;
+  if (driverId) query += `&driver_id=${driverId}`;
+  if (model) query += `&vehicle_model=${model}`;
+  if (status) query += `&status=${status}`;
+  if (start_date) query += `&start_date=${start_date}`;
+  if (end_date) query += `&end_date=${end_date}`;
+
+  fetch(`/api/analytics/dashboard-data${query}`)
+    .then(res => {
+      if (!res.ok) throw new Error("Failed to apply filters");
+      return res.json();
+    })
+    .then(data => {
+      // 1. Update KPIs
+      // total_vehicles, active_vehicles, idle_vehicles, charging_vehicles
+      const totalCount = data.vehicles_data.length;
+      let activeCount = 0;
+      let chargingCount = 0;
+      let idleCount = 0;
+
+      data.vehicles_data.forEach(v => {
+        if (v.status.toLowerCase() === 'active') activeCount++;
+        else if (v.status.toLowerCase() === 'charging') chargingCount++;
+        else idleCount++;
+      });
+
+      document.getElementById('stat-total').textContent = totalCount;
+      document.getElementById('stat-active').textContent = activeCount;
+      document.getElementById('stat-idle').textContent = idleCount;
+      document.getElementById('stat-charging').textContent = chargingCount;
+
+      // Update donut chart
+      updateDonutChart(activeCount, chargingCount, idleCount);
+
+      // Update legends
+      document.getElementById('legend-active').textContent = activeCount;
+      document.getElementById('legend-charging').textContent = chargingCount;
+      document.getElementById('legend-idle').textContent = idleCount;
+
+      // 2. Render driver list preview
+      renderDriverTable(data.drivers_data.slice(0, 5), 'dash-driver-table-tbody');
+
+      // 3. Render model performance views
+      renderModelPerformanceCharts(data.models_data);
+      renderModelLeaderboard(data.models_data);
+
+      // 4. Render driver performance views
+      renderDriverPerformanceCharts(data.drivers_data);
+      renderDriverPerformersLists(data.drivers_data);
+      renderDriverLeaderboard(data.drivers_data);
+
+      // 5. Render safety and violations views
+      renderViolationsCharts(data.drivers_data, data.monthly_trends);
+      buildViolationsHeatmap(data.drivers_data);
+    })
+    .catch(err => {
+      console.error("Error applying filters:", err);
+    });
+}
+
+function resetGlobalFilters() {
+  document.getElementById('filter-year').value = '';
+  document.getElementById('filter-month').value = '';
+  document.getElementById('filter-driver').value = '';
+  document.getElementById('filter-model').value = '';
+  document.getElementById('filter-status').value = '';
+  document.getElementById('filter-start-date').value = '';
+  document.getElementById('filter-end-date').value = '';
+  document.getElementById('global-sort-by').value = 'revenue';
+  document.getElementById('global-sort-order').value = 'desc';
+  applyFiltersAndSort();
+}
+
+function loadChartsData() {
+  fetch("/api/analytics/charts")
+    .then(res => res.json())
+    .then(data => {
+      buildBarChart('energy-chart', data.energy_consumption_kwh);
+      buildBarChart('analytics-chart', data.energy_consumption_kwh, 'green');
+      buildTrendLine(data.active_trend);
+    })
+    .catch(err => {
+      console.error("Error loading weekly chart data:", err);
+    });
+}
+
+/* ── MODEL PERFORMANCE CHART RENDERERS ── */
+function renderModelPerformanceCharts(modelsData) {
+  const ctxCompare = document.getElementById('modelComparisonChart');
+  if (ctxCompare) {
+    if (modelComparisonChartInstance) modelComparisonChartInstance.destroy();
+    modelComparisonChartInstance = new Chart(ctxCompare.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: modelsData.map(m => m.model),
+        datasets: [
+          {
+            label: 'Distance (10x km)',
+            data: modelsData.map(m => m.distance / 10),
+            backgroundColor: 'rgba(37, 99, 235, 0.75)',
+            borderColor: '#2563eb',
+            borderWidth: 1,
+            borderRadius: 4
+          },
+          {
+            label: 'Revenue (₹)',
+            data: modelsData.map(m => m.revenue),
+            backgroundColor: 'rgba(22, 163, 74, 0.75)',
+            borderColor: '#16a34a',
+            borderWidth: 1,
+            borderRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { ticks: { color: '#6b7280' }, grid: { display: false } },
+          y: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(0,0,0,0.05)' } }
+        }
+      }
+    });
+  }
+
+  const ctxRadar = document.getElementById('modelRadarChart');
+  if (ctxRadar) {
+    if (modelRadarChartInstance) modelRadarChartInstance.destroy();
+    
+    const colors = ['rgba(37, 99, 235, 0.15)', 'rgba(22, 163, 74, 0.15)', 'rgba(234, 88, 12, 0.15)', 'rgba(124, 58, 237, 0.15)'];
+    const borderColors = ['#2563eb', '#16a34a', '#ea580c', '#7c3aed'];
+    
+    const datasets = modelsData.map((m, idx) => ({
+      label: m.model,
+      data: [m.score, m.utilization_rate, Math.min(100, m.efficiency * 18), Math.max(50, 100 - (m.violations * 8))],
+      backgroundColor: colors[idx % colors.length],
+      borderColor: borderColors[idx % borderColors.length],
+      pointBackgroundColor: borderColors[idx % borderColors.length],
+      borderWidth: 2
+    }));
+
+    modelRadarChartInstance = new Chart(ctxRadar.getContext('2d'), {
+      type: 'radar',
+      data: {
+        labels: ['Overall Score', 'Utilization Rate', 'Efficiency (scaled)', 'Safety Index'],
+        datasets: datasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          r: {
+            angleLines: { color: 'rgba(0,0,0,0.05)' },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+            pointLabels: { color: '#6b7280', font: { size: 9 } },
+            ticks: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  // Update Model KPIs
+  if (modelsData.length > 0) {
+    const topModel = modelsData[0].model;
+    const avgUtil = modelsData.reduce((acc, curr) => acc + curr.utilization_rate, 0) / modelsData.length;
+    const avgEff = modelsData.reduce((acc, curr) => acc + curr.efficiency, 0) / modelsData.length;
+    const totalMaint = modelsData.reduce((acc, curr) => acc + curr.maintenance_cost, 0);
+
+    document.getElementById('model-kpi-top-model').textContent = topModel;
+    document.getElementById('model-kpi-avg-utilization').textContent = `${avgUtil.toFixed(1)}%`;
+    document.getElementById('model-kpi-avg-efficiency').textContent = `${avgEff.toFixed(2)} km/kWh`;
+    document.getElementById('model-kpi-total-maint').textContent = `₹${Math.round(totalMaint).toLocaleString()}`;
+  }
+}
+
+function renderModelLeaderboard(modelsData) {
+  const tb = document.getElementById('model-leaderboard-tbody');
+  if (!tb) return;
+  tb.innerHTML = '';
+  
+  modelsData.forEach(m => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-id">${m.model}</td>
+      <td>${m.trips}</td>
+      <td>${Math.round(m.distance).toLocaleString()}</td>
+      <td style="color:var(--green);font-weight:700">₹${m.revenue.toLocaleString()}</td>
+      <td style="color:var(--orange)">₹${m.charging_cost.toLocaleString()}</td>
+      <td style="color:var(--red)">₹${m.maintenance_cost.toLocaleString()}</td>
+      <td>${m.violations}</td>
+      <td>${m.efficiency}</td>
+      <td>${m.utilization_rate}%</td>
+      <td><strong style="color:var(--blue)">${m.score}</strong></td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+
+/* ── DRIVER PERFORMANCE CHART RENDERERS ── */
+function renderDriverPerformanceCharts(driversData) {
+  const ctxScore = document.getElementById('driverScoreBarChart');
+  if (ctxScore) {
+    if (driverScoreBarChartInstance) driverScoreBarChartInstance.destroy();
+    driverScoreBarChartInstance = new Chart(ctxScore.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: driversData.map(d => d.name),
+        datasets: [{
+          label: 'Performance Score',
+          data: driversData.map(d => d.score),
+          backgroundColor: driversData.map(d => d.score >= 85 ? '#16a34a' : d.score >= 70 ? '#ea580c' : '#dc2626'),
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { ticks: { color: '#6b7280' }, grid: { display: false } },
+          y: { max: 100, min: 50, ticks: { color: '#6b7280' }, grid: { color: 'rgba(0,0,0,0.05)' } }
+        }
+      }
+    });
+  }
+
+  const ctxTrend = document.getElementById('driverTrendLineChart');
+  if (ctxTrend) {
+    if (driverTrendLineChartInstance) driverTrendLineChartInstance.destroy();
+    const colors = ['#2563eb', '#16a34a', '#ea580c', '#dc2626', '#7c3aed', '#0d9488'];
+    const datasets = driversData.slice(0, 5).map((d, idx) => ({
+      label: d.name,
+      data: [d.March, d.April, d.May],
+      borderColor: colors[idx % colors.length],
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      tension: 0.3
+    }));
+
+    driverTrendLineChartInstance = new Chart(ctxTrend.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: ['March', 'April', 'May'],
+        datasets: datasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#111827', boxWidth: 8, font: { size: 8 } }, position: 'right' }
+        }
+      }
+    });
+  }
+}
+
+function renderDriverPerformersLists(driversData) {
+  const topList = document.getElementById('driver-top-performers-list');
+  const bottomList = document.getElementById('driver-bottom-performers-list');
+  
+  if (topList) {
+    topList.innerHTML = '';
+    const topDrivers = [...driversData].sort((a,b) => b.score - a.score).slice(0, 3);
+    topDrivers.forEach(d => {
+      const div = document.createElement('div');
+      div.className = 'settings-row';
+      div.style.cssText = 'display:flex; justify-content:space-between; padding: 0.45rem 0;';
+      div.innerHTML = `<span>🥇 ${d.name} (${d.id})</span><strong style="color:var(--green)">${d.score}</strong>`;
+      topList.appendChild(div);
+    });
+  }
+
+  if (bottomList) {
+    bottomList.innerHTML = '';
+    const bottomDrivers = [...driversData].sort((a,b) => a.score - b.score).slice(0, 3);
+    bottomDrivers.forEach(d => {
+      const div = document.createElement('div');
+      div.className = 'settings-row';
+      div.style.cssText = 'display:flex; justify-content:space-between; padding: 0.45rem 0;';
+      div.innerHTML = `<span>⚠️ ${d.name} (${d.id})</span><strong style="color:var(--red)">${d.score}</strong>`;
+      bottomList.appendChild(div);
+    });
+  }
+}
+
+function renderDriverLeaderboard(driversData) {
+  const tb = document.getElementById('driver-leaderboard-tbody');
+  if (!tb) return;
+  tb.innerHTML = '';
+  
+  driversData.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-id">${d.id}</td>
+      <td>${d.name}</td>
+      <td>${d.trips}</td>
+      <td style="color:var(--green);font-weight:700">₹${d.revenue.toLocaleString()}</td>
+      <td>${Math.round(d.distance).toLocaleString()} km</td>
+      <td style="color:var(--red)">${d.violations}</td>
+      <td>⭐ ${d.rating}</td>
+      <td>${d.utilization_rate}%</td>
+      <td><strong style="color:var(--blue)">${d.score}</strong></td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+
+/* ── SAFETY & VIOLATIONS CHART RENDERERS ── */
+function renderViolationsCharts(driversData, monthlyTrends) {
+  const ctxLeaderboard = document.getElementById('violationsLeaderboardChart');
+  if (ctxLeaderboard) {
+    if (violationsLeaderboardChartInstance) violationsLeaderboardChartInstance.destroy();
+    
+    const sortedDrivers = [...driversData].sort((a,b) => b.violations - a.violations);
+    
+    violationsLeaderboardChartInstance = new Chart(ctxLeaderboard.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: sortedDrivers.map(d => d.name),
+        datasets: [{
+          label: 'Violations Count',
+          data: sortedDrivers.map(d => d.violations),
+          backgroundColor: '#dc2626',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { ticks: { color: '#6b7280' }, grid: { display: false } },
+          y: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(0,0,0,0.05)' } }
+        }
+      }
+    });
+  }
+
+  const ctxMonthly = document.getElementById('violationsMonthlyTrendChart');
+  if (ctxMonthly) {
+    if (violationsMonthlyTrendChartInstance) violationsMonthlyTrendChartInstance.destroy();
+    
+    violationsMonthlyTrendChartInstance = new Chart(ctxMonthly.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: ['March', 'April', 'May'],
+        datasets: [{
+          label: 'Total Violations',
+          data: [monthlyTrends.March.violations, monthlyTrends.April.violations, monthlyTrends.May.violations],
+          borderColor: '#ea580c',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { ticks: { color: '#6b7280' }, grid: { display: false } },
+          y: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(0,0,0,0.05)' } }
+        }
+      }
+    });
+  }
+
+  // Update Violations KPIs
+  const totalViolations = driversData.reduce((acc, curr) => acc + curr.violations, 0);
+  const topViolationDriver = [...driversData].sort((a,b) => b.violations - a.violations)[0];
+  const topViolationDriverName = topViolationDriver && topViolationDriver.violations > 0 ? `${topViolationDriver.name} (${topViolationDriver.violations})` : 'None';
+  
+  const avgSafetyScore = driversData.reduce((acc, curr) => acc + curr.score, 0) / (driversData.length || 1);
+  
+  document.getElementById('violations-kpi-total').textContent = totalViolations;
+  document.getElementById('violations-kpi-top-driver').textContent = topViolationDriverName;
+  document.getElementById('violations-kpi-safety-index').textContent = `${avgSafetyScore.toFixed(1)}%`;
+  
+  // Calculate EV with most violations
+  const vehicleViolations = {};
+  allVehicles.forEach(v => {
+    const drv = driversData.find(d => d.vehicle_id === v.id);
+    vehicleViolations[v.id] = drv ? drv.violations : 0;
+  });
+  const topViolationEVId = Object.keys(vehicleViolations).sort((a,b) => vehicleViolations[b] - vehicleViolations[a])[0];
+  const topViolationEVLabel = topViolationEVId && vehicleViolations[topViolationEVId] > 0 ? `${topViolationEVId} (${vehicleViolations[topViolationEVId]})` : 'None';
+  document.getElementById('violations-kpi-top-vehicle').textContent = topViolationEVLabel;
+}
+
+function buildViolationsHeatmap(driversData) {
+  const table = document.getElementById("violations-heatmap-table");
+  if (!table) return;
+  table.innerHTML = '';
+
+  const thead = document.createElement("thead");
+  thead.innerHTML = `
+    <tr>
+      <th style="padding:6px;font-size:0.7rem;">Driver ID</th>
+      <th style="padding:6px;font-size:0.7rem;text-align:left;">Name</th>
+      <th style="padding:6px;font-size:0.7rem;">Overspeeding</th>
+      <th style="padding:6px;font-size:0.7rem;">Harsh Braking</th>
+      <th style="padding:6px;font-size:0.7rem;">Harsh Acceleration</th>
+      <th style="padding:6px;font-size:0.7rem;">Total</th>
+    </tr>
+  `;
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  
+  const promises = driversData.map(d => 
+    fetch(`/api/analytics/driver-violations/${d.id}`).then(res => res.json())
+  );
+  
+  Promise.all(promises).then(results => {
+    results.forEach(res => {
+      const tr = document.createElement("tr");
+      const drv = driversData.find(d => d.id === res.driver_id);
+      if (!drv) return;
+      
+      const overspeed = res.summary.total_overspeed;
+      const braking = res.summary.total_braking;
+      const accel = res.summary.total_accel;
+      const grand = res.summary.grand_total;
+      
+      tr.innerHTML = `
+        <td class="td-id" style="padding:6px;">${res.driver_id}</td>
+        <td style="font-weight:600;padding:6px;text-align:left;">${drv.name}</td>
+        <td style="padding:6px;background:${overspeed > 0 ? `rgba(220,38,38,${Math.min(0.25, overspeed * 0.05)})` : ''};color:${overspeed > 0 ? 'var(--red)' : 'var(--muted)'};font-weight:bold">${overspeed}</td>
+        <td style="padding:6px;background:${braking > 0 ? `rgba(234,88,12,${Math.min(0.25, braking * 0.05)})` : ''};color:${braking > 0 ? 'var(--orange)' : 'var(--muted)'};font-weight:bold">${braking}</td>
+        <td style="padding:6px;background:${accel > 0 ? `rgba(37,99,235,${Math.min(0.25, accel * 0.05)})` : ''};color:${accel > 0 ? 'var(--blue)' : 'var(--muted)'};font-weight:bold">${accel}</td>
+        <td style="padding:6px;font-weight:800;color:var(--text)">${grand}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+  });
 }

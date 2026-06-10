@@ -62,6 +62,7 @@ def seed_database(db: Session):
     for _, row in admin_df.iterrows():
         driver_id = str(row["Driver Id"]).strip()
         driver_name = str(row["Driver Name"]).strip()
+        admin_id = str(row["Admin Id"]).strip()
         
         # In the excel, Vehicle Id might be 0, so we synthesize a unique code like EV-D001, etc.
         vehicle_excel_id = row["Vehicle Id"]
@@ -107,10 +108,11 @@ def seed_database(db: Session):
             email=f"{driver_id.lower()}@evfleet.com",
             user_id=driver_id,
             vehicle_id=vehicle_id,
+            admin_id=admin_id,
             status="Idle"
         )
         db.add(driver)
-        logger.info(f"Added Driver: {driver_id} linked to EV: {vehicle_id}")
+        logger.info(f"Added Driver: {driver_id} managed by Admin: {admin_id} linked to EV: {vehicle_id}")
 
     db.commit()
 

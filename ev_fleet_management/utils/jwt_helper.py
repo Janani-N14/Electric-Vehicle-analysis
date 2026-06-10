@@ -34,3 +34,9 @@ def get_current_user_from_cookie(request: Request) -> Dict:
         raise AuthenticationError("Missing authentication token. Please sign in.")
         
     return decode_access_token(token)
+
+def get_optional_current_user(request: Request) -> Optional[Dict]:
+    try:
+        return get_current_user_from_cookie(request)
+    except Exception:
+        return None

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from ev_fleet_management.utils.db import get_db
-from ev_fleet_management.utils.jwt_helper import get_current_user_from_cookie
+from ev_fleet_management.utils.jwt_helper import get_current_user_from_cookie, get_optional_current_user
 from ev_fleet_management.model.models import DriverModel, DriverCreate, DriverOut, UserModel, EVModel
 from ev_fleet_management.logger import get_logger
 
@@ -10,7 +10,12 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/drivers", tags=["drivers"])
 
 @router.get("", response_model=List[DriverOut])
-def get_all_drivers(db: Session = Depends(get_db)):
+def get_all_drivers(
+    current_user: dict = Depends(get_optional_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user and current_user.get("role") == "admin":
+        return db.query(DriverModel).filter(DriverModel.admin_id == current_user["sub"]).all()
     return db.query(DriverModel).all()
 
 @router.post("", response_model=DriverOut, status_code=status.HTTP_201_CREATED)

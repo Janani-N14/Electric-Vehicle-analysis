@@ -19,7 +19,8 @@ class UserModel(Base):
     is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    driver = relationship("DriverModel", back_populates="user", uselist=False)
+    driver = relationship("DriverModel", back_populates="user", uselist=False, foreign_keys="[DriverModel.user_id]")
+    managed_drivers = relationship("DriverModel", back_populates="admin", foreign_keys="[DriverModel.admin_id]")
 
 
 class EVModel(Base):
@@ -49,9 +50,11 @@ class DriverModel(Base):
     email = Column(String(100), unique=True, nullable=False)
     user_id = Column(String(50), ForeignKey("users.id"), nullable=True)
     vehicle_id = Column(String(50), ForeignKey("evs.id"), nullable=True)
+    admin_id = Column(String(50), ForeignKey("users.id"), nullable=True)
     status = Column(String(20), default="Idle")  # Working, Idle, Charging, Garage
 
-    user = relationship("UserModel", back_populates="driver")
+    user = relationship("UserModel", back_populates="driver", foreign_keys=[user_id])
+    admin = relationship("UserModel", back_populates="managed_drivers", foreign_keys=[admin_id])
     vehicle = relationship("EVModel", back_populates="drivers")
 
 
