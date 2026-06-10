@@ -76,52 +76,101 @@ def get_fleet_summary(
 
 @router.get("/charts")
 def get_charts_data(
+    year: Optional[int] = None,
+    month: Optional[str] = None,
+    driver_id: Optional[str] = None,
+    vehicle_model: Optional[str] = None,
+    status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     current_user: dict = Depends(get_optional_current_user),
     db: Session = Depends(get_db)
 ):
     admin_id = current_user["sub"] if current_user and current_user.get("role") == "admin" else None
     
-    # Query driver IDs
-    if admin_id:
-        drivers = db.query(DriverModel).filter(DriverModel.admin_id == admin_id).all()
-        driver_ids = [d.id for d in drivers]
-    else:
-        drivers = db.query(DriverModel).all()
-        driver_ids = [d.id for d in drivers]
+    # Load raw data from database
+    df_telemetry = pd.read_sql_query("SELECT * FROM telemetry", db.connection())
+    df_evs = pd.read_sql_query("SELECT * FROM evs", db.connection())
+    df_drivers = pd.read_sql_query("SELECT * FROM drivers", db.connection())
 
-    if not driver_ids:
+    if admin_id:
+        df_drivers = df_drivers[df_drivers['admin_id'] == admin_id]
+        managed_driver_ids = df_drivers['id'].unique().tolist()
+        df_telemetry = df_telemetry[df_telemetry['driver_id'].isin(managed_driver_ids)]
+        managed_vehicle_ids = df_drivers['vehicle_id'].dropna().unique().tolist()
+        df_evs = df_evs[df_evs['id'].isin(managed_vehicle_ids)]
+
+    if df_telemetry.empty:
         return {
             "energy_consumption_kwh": [0] * 7,
             "active_trend": [0] * 7,
+            "charging_cost_inr": [0] * 7,
             "labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         }
 
-    # Query telemetry records
-    telemetry = db.query(TelemetryModel).filter(TelemetryModel.driver_id.in_(driver_ids)).all()
-        
+    df_telemetry['datetime'] = pd.to_datetime(df_telemetry['datetime'])
+    df_telemetry['year'] = df_telemetry['datetime'].dt.year
+    df_telemetry['year_month'] = df_telemetry['datetime'].dt.strftime('%Y-%m')
+    df_telemetry['mapped_month'] = df_telemetry['year_month'].apply(map_month)
+
+    # Merge to filter by EV model and Status
+    df_telemetry = df_telemetry.merge(df_evs[['id', 'model', 'status']], left_on='vehicle_id', right_on='id', how='left', suffixes=('', '_ev'))
+    df_telemetry = df_telemetry.merge(df_drivers[['id', 'status']], left_on='driver_id', right_on='id', how='left', suffixes=('', '_drv'))
+
+    if year:
+        df_telemetry = df_telemetry[df_telemetry['year'] == year]
+    if month:
+        df_telemetry = df_telemetry[df_telemetry['mapped_month'].str.lower() == month.lower()]
+    if driver_id:
+        df_telemetry = df_telemetry[df_telemetry['driver_id'] == driver_id]
+    if vehicle_model:
+        df_telemetry = df_telemetry[df_telemetry['model'].str.lower() == vehicle_model.lower()]
+    if status:
+        df_telemetry = df_telemetry[
+            (df_telemetry['working_status'].str.lower() == status.lower()) |
+            (df_telemetry['status'].str.lower() == status.lower()) |
+            (df_telemetry['status_drv'].str.lower() == status.lower())
+        ]
+    if start_date:
+        df_telemetry = df_telemetry[df_telemetry['datetime'] >= pd.to_datetime(start_date)]
+    if end_date:
+        df_telemetry = df_telemetry[df_telemetry['datetime'] <= pd.to_datetime(end_date)]
+
     daily_energy = [0.0] * 7
     daily_active = [set() for _ in range(7)]
-    
-    for record in telemetry:
-        if record.datetime:
-            weekday = record.datetime.weekday()
-            if record.energy_efficiency and record.energy_efficiency > 0 and record.distance_travelled:
-                daily_energy[weekday] += record.distance_travelled / record.energy_efficiency
-            if record.speed and record.speed > 0:
-                daily_active[weekday].add(record.vehicle_id)
+    daily_charging = [0.0] * 7
+
+    for _, record in df_telemetry.iterrows():
+        dt_val = record['datetime']
+        if pd.notna(dt_val):
+            weekday = dt_val.weekday()
+            eff = record['energy_efficiency']
+            dist = record['distance_travelled']
+            speed = record['speed']
+            chg = record['charging_cost']
+            
+            if pd.notna(eff) and eff > 0 and pd.notna(dist):
+                daily_energy[weekday] += dist / eff
+            if pd.notna(speed) and speed > 0:
+                daily_active[weekday].add(record['vehicle_id'])
+            if pd.notna(chg):
+                daily_charging[weekday] += chg
 
     active_trend = [len(s) for s in daily_active]
     energy_consumption = [round(e, 1) for e in daily_energy]
-    
-    # Fallback to sensible defaults scaled by drivers if no telemetry activity exists yet
+    charging_costs = [round(c, 2) for c in daily_charging]
+
+    # Defaults fallback
     if sum(energy_consumption) == 0:
-        num_drivers = len(driver_ids)
+        num_drivers = df_drivers['id'].nunique() if not df_drivers.empty else 1
         energy_consumption = [int(45 * num_drivers), int(51 * num_drivers), int(48 * num_drivers), int(52 * num_drivers), int(55 * num_drivers), int(41 * num_drivers), int(39 * num_drivers)]
         active_trend = [max(1, int(num_drivers * 0.7)), num_drivers, max(1, int(num_drivers * 0.8)), num_drivers, num_drivers, max(1, int(num_drivers * 0.9)), max(1, int(num_drivers * 0.6))]
+        charging_costs = [int(980 * num_drivers), int(1120 * num_drivers), int(870 * num_drivers), int(1440 * num_drivers), int(1310 * num_drivers), int(720 * num_drivers), int(648 * num_drivers)]
 
     return {
         "energy_consumption_kwh": energy_consumption,
         "active_trend": active_trend,
+        "charging_cost_inr": charging_costs,
         "labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     }
 
@@ -516,6 +565,8 @@ def get_dashboard_data(
         df_evs = pd.read_sql_query("SELECT * FROM evs", db.connection())
         df_drivers = pd.read_sql_query("SELECT * FROM drivers", db.connection())
 
+        unfiltered_models = df_evs['model'].dropna().unique().tolist()
+
         if admin_id:
             df_drivers = df_drivers[df_drivers['admin_id'] == admin_id]
             managed_driver_ids = df_drivers['id'].unique().tolist()
@@ -538,7 +589,7 @@ def get_dashboard_data(
         df_telemetry = df_telemetry.merge(df_drivers[['id', 'name', 'status']], left_on='driver_id', right_on='id', how='left', suffixes=('', '_drv'))
 
         # Store a copy of unfiltered databases to return options for filters
-        all_models = df_evs['model'].dropna().unique().tolist()
+        all_models = unfiltered_models
         all_drivers_list = df_drivers[['id', 'name']].to_dict(orient='records')
         
         # Apply filters to df_telemetry

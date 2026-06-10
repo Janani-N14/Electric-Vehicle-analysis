@@ -437,7 +437,6 @@ function initTopDrivers(){
 }
 
 function initAnalyticsSection(){
-  buildBarChart('analytics-chart', energyVals, 'green');
   initTopDrivers();
   
   let extCard = document.getElementById("analytics-behavior-correlation-card");
@@ -925,7 +924,6 @@ function filterVehTable(q){
 
 /* ── CHARGING ANALYTICS ── */
 function initChargingAnalytics(){
-  buildBarChart('charge-cost-chart',[9800,11200,8700,14400,13100,7200,6480],'orange');
   renderChargeStatus();
   
   fetch("/api/telemetry/charging")
@@ -1315,13 +1313,13 @@ function navigate(section){
   if(section === 'fleet') initFleetTable();
   if(section === 'drivers') renderDriverTable(allDrivers, 'drivers-tbody');
   if(section === 'stations') initStationsDetail();
-  if(section === 'analytics') initAnalyticsSection();
+  if(section === 'analytics') { initAnalyticsSection(); applyFiltersAndSort(); }
   if(section === 'alerts') renderAlerts('all-alerts');
   if(section === 'reports') initExecutiveReport();
   if(section === 'revenue') initRevenue();
   if(section === 'battery') initBatteryMonitor();
   if(section === 'vehicles') initVehiclePerf();
-  if(section === 'charging-analytics') initChargingAnalytics();
+  if(section === 'charging-analytics') { initChargingAnalytics(); applyFiltersAndSort(); }
   if(section === 'maintenance') initMaintenance();
   if(section === 'model-performance') applyFiltersAndSort();
   if(section === 'driver-performance') applyFiltersAndSort();
@@ -1483,35 +1481,6 @@ function loadDashboardData() {
     
     // Populate vehicle selection for forms
     populateVehicleSelect();
-
-    // Populate driver filter dropdown
-    const driverFilter = document.getElementById('filter-driver');
-    if (driverFilter) {
-      const prevVal = driverFilter.value;
-      driverFilter.innerHTML = '<option value="">All Drivers</option>';
-      allDrivers.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        opt.textContent = `${d.id} — ${d.name}`;
-        driverFilter.appendChild(opt);
-      });
-      driverFilter.value = prevVal;
-    }
-
-    // Populate model filter dropdown
-    const modelFilter = document.getElementById('filter-model');
-    if (modelFilter) {
-      const prevVal = modelFilter.value;
-      modelFilter.innerHTML = '<option value="">All Models</option>';
-      const uniqueModels = [...new Set(allVehicles.map(v => v.model))];
-      uniqueModels.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m;
-        opt.textContent = m;
-        modelFilter.appendChild(opt);
-      });
-      modelFilter.value = prevVal;
-    }
     
     // Populate violations driver select dropdown
     const vioDriverSelect = document.getElementById('violations-driver-select');
@@ -2059,6 +2028,30 @@ function applyFiltersAndSort() {
       // 5. Render safety and violations views
       renderViolationsCharts(data.drivers_data, data.monthly_trends);
       buildViolationsHeatmap(data.drivers_data);
+
+      // Populate filter dropdowns if not populated yet
+      const modelFilter = document.getElementById('filter-model');
+      if (modelFilter && modelFilter.children.length <= 1 && data.filter_options && data.filter_options.models) {
+        data.filter_options.models.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m;
+          opt.textContent = m;
+          modelFilter.appendChild(opt);
+        });
+      }
+
+      const driverFilter = document.getElementById('filter-driver');
+      if (driverFilter && driverFilter.children.length <= 1 && data.filter_options && data.filter_options.drivers) {
+        data.filter_options.drivers.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = `${d.id} — ${d.name}`;
+          driverFilter.appendChild(opt);
+        });
+      }
+
+      // Fetch dynamic charts data with same filters
+      loadChartsData(query);
     })
     .catch(err => {
       console.error("Error applying filters:", err);
@@ -2078,13 +2071,14 @@ function resetGlobalFilters() {
   applyFiltersAndSort();
 }
 
-function loadChartsData() {
-  fetch("/api/analytics/charts")
+function loadChartsData(query = '') {
+  fetch(`/api/analytics/charts${query}`)
     .then(res => res.json())
     .then(data => {
       buildBarChart('energy-chart', data.energy_consumption_kwh);
       buildBarChart('analytics-chart', data.energy_consumption_kwh, 'green');
       buildTrendLine(data.active_trend);
+      buildBarChart('charge-cost-chart', data.charging_cost_inr, 'orange');
     })
     .catch(err => {
       console.error("Error loading weekly chart data:", err);
