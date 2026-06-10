@@ -154,6 +154,7 @@ class EVOut(BaseModel):
     battery_health_soh: float
     next_service_km: float
     status: str
+    maintenance_cost: Optional[float] = 0.0
 
     class Config:
         from_attributes = True

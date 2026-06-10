@@ -8,10 +8,10 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root{
-      --bg:#0d1117;--blue:#2f81f7;--green:#3fb950;--orange:#d29922;--red:#f85149;--purple:#bc8cff;
-      --blue-dim:rgba(47,129,247,.12);--green-dim:rgba(63,185,80,.12);
-      --glass:rgba(22,27,34,.95);--border:rgba(48,54,61,.95);
-      --text:#e6edf3;--muted:#7d8590;
+      --bg:#f4f6f9;--blue:#2563eb;--green:#16a34a;--orange:#ea580c;--red:#dc2626;--purple:#7c3aed;
+      --blue-dim:rgba(37,99,235,.08);--green-dim:rgba(22,163,74,.08);
+      --glass:rgba(255,255,255,.85);--border:rgba(229,231,235,0.9);
+      --text:#111827;--muted:#6b7280;
     }
     html,body{height:100%;font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);}
     #bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
@@ -95,7 +95,7 @@
 
     /* BATTERY */
     .battery-pct{font-size:2.6rem;font-weight:800;color:var(--green);text-shadow:0 0 18px rgba(0,255,136,.35);}
-    .battery-bar-outer{background:rgba(255,255,255,.06);border-radius:2rem;height:.65rem;overflow:hidden;margin:.5rem 0;}
+    .battery-bar-outer{background:rgba(0,0,0,.06);border-radius:2rem;height:.65rem;overflow:hidden;margin:.5rem 0;}
     .battery-bar-inner{height:100%;border-radius:2rem;background:linear-gradient(90deg,var(--blue),var(--green));
       box-shadow:0 0 8px rgba(0,255,136,.3);transition:width 1.2s ease;}
     .battery-stats{display:flex;gap:1.2rem;flex-wrap:wrap;}
@@ -163,10 +163,10 @@
 
     /* MAP */
     .map-box{border-radius:.75rem;overflow:hidden;border:1px solid var(--border);position:relative;}
-    .map-box .leaflet-container{background:#0a1628;}
-    .leaflet-tile{filter:brightness(.75) saturate(.6) hue-rotate(180deg);}
-    .leaflet-popup-content-wrapper{background:#040f22;border:1px solid var(--border);color:var(--text);border-radius:.6rem;box-shadow:0 0 16px rgba(0,212,255,.2);}
-    .leaflet-popup-tip{background:#040f22;}
+    .map-box .leaflet-container{background:#f4f6f9;}
+    .leaflet-tile{filter:none;}
+    .leaflet-popup-content-wrapper{background:#ffffff;border:1px solid var(--border);color:var(--text);border-radius:.6rem;box-shadow:0 5px 15px rgba(0,0,0,.08);}
+    .leaflet-popup-tip{background:#ffffff;}
     .leaflet-popup-content{font-size:.78rem;line-height:1.5;margin:.5rem .7rem;}
 
     /* STATION CARDS */
@@ -235,8 +235,8 @@
     .modal-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);
       backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:1rem;}
     .modal-overlay.open{display:flex;animation:fadeIn .25s ease both;}
-    .modal{background:#040f22;border:1px solid var(--border);border-radius:1rem;padding:1.8rem;
-      max-width:420px;width:100%;box-shadow:0 0 40px rgba(0,212,255,.12);}
+    .modal{background:#ffffff;border:1px solid var(--border);border-radius:1rem;padding:1.8rem;
+      max-width:420px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.08);}
     .modal-title{font-size:1rem;font-weight:700;margin-bottom:1rem;color:var(--blue);}
     .modal-body{font-size:.85rem;color:var(--muted);line-height:1.6;}
     .modal-close{margin-top:1.2rem;width:100%;padding:.6rem;border:1px solid var(--border);

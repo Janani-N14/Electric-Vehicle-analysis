@@ -7,13 +7,14 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root{
-      --bg:#020b18;--blue:#00d4ff;--green:#00ff88;--orange:#ffaa00;--red:#ff4d6d;--purple:#b57aff;
-      --blue-dim:rgba(0,212,255,.12);--green-dim:rgba(0,255,136,.12);
-      --glass:rgba(4,15,34,.7);--border:rgba(0,212,255,.2);
-      --text:#e8f4ff;--muted:#7a9bbf;
+      --bg:#f4f6f9;--blue:#2563eb;--green:#16a34a;--orange:#ea580c;--red:#dc2626;--purple:#7c3aed;
+      --blue-dim:rgba(37,99,235,.08);--green-dim:rgba(22,163,74,.08);
+      --glass:rgba(255,255,255,.85);--border:rgba(229,231,235,0.9);
+      --text:#111827;--muted:#6b7280;
     }
     html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);}
     #bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
@@ -223,8 +224,8 @@
     .modal-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.65);
       backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:1rem;}
     .modal-overlay.open{display:flex;animation:fadeIn .25s ease both;}
-    .modal{background:#040f22;border:1px solid var(--border);border-radius:1rem;padding:1.8rem;
-      max-width:460px;width:100%;box-shadow:0 0 40px rgba(0,212,255,.12);}
+    .modal{background:#ffffff;border:1px solid var(--border);border-radius:1rem;padding:1.8rem;
+      max-width:460px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.08);}
     .modal-title{font-size:1rem;font-weight:700;margin-bottom:1rem;color:var(--green);}
     .modal-body{font-size:.85rem;color:var(--muted);line-height:1.7;}
     .modal-footer{display:flex;gap:.6rem;margin-top:1.2rem;}
@@ -305,6 +306,15 @@
     <button class="nav-item" data-section="revenue" onclick="navigate('revenue')">
       <span class="ni">💰</span> Revenue
     </button>
+    <button class="nav-item" data-section="model-performance" onclick="navigate('model-performance')">
+      <span class="ni">🏎️</span> Model Performance
+    </button>
+    <button class="nav-item" data-section="driver-performance" onclick="navigate('driver-performance')">
+      <span class="ni">👤</span> Driver Performance
+    </button>
+    <button class="nav-item" data-section="violations-analytics" onclick="navigate('violations-analytics')">
+      <span class="ni">⚠️</span> Violations
+    </button>
 
     <div class="nav-section">System</div>
     <button class="nav-item" data-section="maintenance" onclick="navigate('maintenance')">
@@ -335,6 +345,80 @@
 
   <!-- MAIN CONTENT -->
   <main class="main">
+
+    <!-- GLOBAL FILTER PANEL -->
+    <div class="card global-filter-panel" style="margin-bottom:1.4rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.7rem; border-bottom:1px solid var(--border); padding-bottom:0.5rem; flex-wrap:wrap; gap: 0.5rem;">
+        <span style="font-weight:700; font-size:0.9rem; color:var(--green); display:flex; align-items:center; gap:0.4rem;">
+          🔍 EV Fleet Global Filters & Sorting
+        </span>
+        <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+          <span style="font-size:0.75rem; color:var(--muted); font-weight: 600;">Sort By:</span>
+          <select id="global-sort-by" onchange="applyFiltersAndSort()" style="background:rgba(0,0,0,0.03); border:1px solid var(--border); border-radius:4px; padding:0.25rem 0.5rem; font-size:0.75rem; color:var(--text); cursor:pointer; font-family:inherit;">
+            <option value="revenue">Revenue</option>
+            <option value="maintenance">Maintenance Cost</option>
+            <option value="violations">Driver Violations</option>
+            <option value="score">Performance Score</option>
+            <option value="distance">Distance Covered</option>
+            <option value="charging">Charging Cost</option>
+          </select>
+          <select id="global-sort-order" onchange="applyFiltersAndSort()" style="background:rgba(0,0,0,0.03); border:1px solid var(--border); border-radius:4px; padding:0.25rem 0.5rem; font-size:0.75rem; color:var(--text); cursor:pointer; font-family:inherit;">
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </select>
+          <button class="rtab" onclick="resetGlobalFilters()" style="padding:0.25rem 0.7rem; font-size:0.72rem; margin:0; border-radius: 4px; border:1px solid var(--border);">Reset</button>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:0.6rem;">
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <label style="font-size:0.65rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Year</label>
+          <select id="filter-year" onchange="applyFiltersAndSort()" style="background:rgba(0,0,0,0.03); border:1px solid var(--border); border-radius:4px; padding:0.35rem; font-size:0.8rem; color:var(--text); outline:none; font-family:inherit;">
+            <option value="">All Years</option>
+            <option value="2025">2025</option>
+            <option value="2026">2026</option>
+          </select>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <label style="font-size:0.65rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Month</label>
+          <select id="filter-month" onchange="applyFiltersAndSort()" style="background:rgba(0,0,0,0.03); border:1px solid var(--border); border-radius:4px; padding:0.35rem; font-size:0.8rem; color:var(--text); outline:none; font-family:inherit;">
+            <option value="">All Months</option>
+            <option value="March">March</option>
+            <option value="April">April</option>
+            <option value="May">May</option>
+          </select>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <label style="font-size:0.65rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Driver</label>
+          <select id="filter-driver" onchange="applyFiltersAndSort()" style="background:rgba(0,0,0,0.03); border:1px solid var(--border); border-radius:4px; padding:0.35rem; font-size:0.8rem; color:var(--text); outline:none; font-family:inherit;">
+            <option value="">All Drivers</option>
+          </select>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <label style="font-size:0.65rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Vehicle Model</label>
+          <select id="filter-model" onchange="applyFiltersAndSort()" style="background:rgba(0,0,0,0.03); border:1px solid var(--border); border-radius:4px; padding:0.35rem; font-size:0.8rem; color:var(--text); outline:none; font-family:inherit;">
+            <option value="">All Models</option>
+          </select>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <label style="font-size:0.65rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Status</label>
+          <select id="filter-status" onchange="applyFiltersAndSort()" style="background:rgba(0,0,0,0.03); border:1px solid var(--border); border-radius:4px; padding:0.35rem; font-size:0.8rem; color:var(--text); outline:none; font-family:inherit;">
+            <option value="">All Statuses</option>
+            <option value="Active">Active</option>
+            <option value="Idle">Idle</option>
+            <option value="Charging">Charging</option>
+            <option value="Offline">Offline / Garage</option>
+          </select>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <label style="font-size:0.65rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Start Date</label>
+          <input type="date" id="filter-start-date" onchange="applyFiltersAndSort()" style="background:rgba(0,0,0,0.03); border:1px solid var(--border); border-radius:4px; padding:0.22rem 0.35rem; font-size:0.8rem; color:var(--text); outline:none; font-family:inherit;" />
+        </div>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <label style="font-size:0.65rem; color:var(--muted); font-weight:600; text-transform:uppercase;">End Date</label>
+          <input type="date" id="filter-end-date" onchange="applyFiltersAndSort()" style="background:rgba(0,0,0,0.03); border:1px solid var(--border); border-radius:4px; padding:0.22rem 0.35rem; font-size:0.8rem; color:var(--text); outline:none; font-family:inherit;" />
+        </div>
+      </div>
+    </div>
 
     <!-- ═══════════════ DASHBOARD ═══════════════ -->
     <div class="section active" id="sec-dashboard">
@@ -382,7 +466,7 @@
           <div class="card-title">🚗 Fleet Status Breakdown</div>
           <div class="donut-wrap">
             <svg width="110" height="110" viewBox="0 0 110 110" style="flex-shrink:0;">
-              <circle cx="55" cy="55" r="40" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="18"/>
+              <circle cx="55" cy="55" r="40" fill="none" stroke="rgba(0,0,0,.05)" stroke-width="18"/>
               <circle id="donut-active" cx="55" cy="55" r="40" fill="none" stroke="var(--green)" stroke-width="18"
                 stroke-dasharray="163 88" stroke-dashoffset="251" transform="rotate(-90 55 55)"/>
               <circle id="donut-charging" cx="55" cy="55" r="40" fill="none" stroke="var(--blue)" stroke-width="18"
@@ -449,7 +533,7 @@
               <thead><tr>
                 <th>ID</th><th>Name</th><th>Vehicle</th><th>Status</th>
               </tr></thead>
-              <tbody></tbody>
+              <tbody id="dash-driver-table-tbody"></tbody>
             </table>
           </div>
         </div>
@@ -581,33 +665,343 @@
 
     <!-- ═══════════════ REPORTS ═══════════════ -->
     <div class="section" id="sec-reports">
-      <div class="topbar"><h2>Fleet <span>Reports</span></h2>
-        <button class="action-btn green" onclick="exportSectionToPDF('sec-reports','fleet-report.pdf')">Export PDF</button>
+      <div class="topbar">
+        <h2>Executive Fleet <span>Reports</span></h2>
+        <button class="action-btn green" onclick="exportSectionToPDF('sec-reports','fleet-report.pdf')">Export PDF Report</button>
       </div>
+
+      <!-- AVERAGE METRICS DASHBOARD -->
+      <div class="grid-3" style="margin-bottom:1.4rem;">
+        <div class="card">
+          <div class="card-title">🔋 Fleet Avg Battery</div>
+          <div class="stat-value blue" id="rep-avg-battery">--%</div>
+          <div class="stat-label" id="rep-avg-range">Range: -- km</div>
+        </div>
+        <div class="card">
+          <div class="card-title">💸 Cost Indicators</div>
+          <div class="stat-value orange" id="rep-avg-charge-cost">₹--</div>
+          <div class="stat-label" id="rep-avg-maint-cost">Maint: ₹--</div>
+        </div>
+        <div class="card">
+          <div class="card-title">🚗 Usage Indicators</div>
+          <div class="stat-value green" id="rep-avg-distance">-- km</div>
+          <div class="stat-label" id="rep-avg-efficiency">Efficiency: -- km/kWh</div>
+        </div>
+      </div>
+
+      <!-- ROW 1: Pie & Active -->
+      <div class="grid-2" style="margin-bottom:1.4rem;">
+        <div class="card">
+          <div class="card-title">📊 Total Vehicles: Working vs Garage</div>
+          <div style="position:relative; height: 200px; display: flex; justify-content: center; align-items: center;">
+            <canvas id="workingGarageChart"></canvas>
+          </div>
+          <div style="display:flex; justify-content:space-around; font-size:0.75rem; margin-top:0.8rem; color:var(--muted)">
+            <span>Working: <strong id="rep-working-val" style="color:var(--green)">--</strong></span>
+            <span>Garage: <strong id="rep-garage-val" style="color:var(--red)">--</strong></span>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="card-title">🚗 Active Vehicles Status (Running or Charging)</div>
+          <div style="position:relative; height: 200px; display: flex; justify-content: center; align-items: center;">
+            <canvas id="activeVehiclesChart"></canvas>
+          </div>
+          <div style="display:flex; justify-content:space-around; font-size:0.75rem; margin-top:0.8rem; color:var(--muted)">
+            <span>Active Count: <strong id="rep-active-count" style="color:var(--blue)">--</strong></span>
+            <span>Active Rate: <strong id="rep-active-pct" style="color:var(--blue)">--%</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW 2: Vehicle Income Line Chart & Charging Revenue Bar Chart -->
+      <div class="grid-2" style="margin-bottom:1.4rem;">
+        <div class="card">
+          <div class="card-title">📈 Vehicle Monthly Income Trend (March, April, May)</div>
+          <div style="position:relative; height: 230px;">
+            <canvas id="vehicleIncomeChart"></canvas>
+          </div>
+          <div style="font-size:0.72rem; margin-top:0.8rem; color:var(--muted); text-align:center;">
+            Highest Revenue EV: <strong id="rep-highest-revenue-vehicle" style="color:var(--green)">--</strong>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">⚡ Charging Revenue (March, April, May)</div>
+          <div style="position:relative; height: 230px;">
+            <canvas id="chargingRevenueChart"></canvas>
+          </div>
+          <div style="font-size:0.72rem; margin-top:0.8rem; color:var(--muted); text-align:center;">
+            Total Charging Revenue: <strong id="rep-total-charging-revenue" style="color:var(--orange)">₹--</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW 3: Correlation Heatmap & Costs Bar Chart -->
+      <div class="grid-2" style="margin-bottom:1.4rem;">
+        <div class="card">
+          <div class="card-title">📊 Maintenance Cost Correlation Matrix</div>
+          <div style="overflow-x:auto; margin-top:0.5rem;">
+            <table id="maint-corr-heatmap-table" style="font-size:0.68rem; text-align:center; border-collapse:collapse; width:100%;">
+              <!-- Rendered Dynamically -->
+            </table>
+          </div>
+          <div style="font-size:0.68rem; color:var(--muted); margin-top:0.7rem; line-height:1.4">
+            Strongest Positive: <strong id="rep-strongest-pos" style="color:var(--green)">--</strong><br>
+            Strongest Negative: <strong id="rep-strongest-neg" style="color:var(--red)">--</strong>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">💰 Operating Costs Contribution (Charging vs Maintenance)</div>
+          <div style="position:relative; height: 210px;">
+            <canvas id="costComparisonChart"></canvas>
+          </div>
+          <div style="display:flex; justify-content:space-around; font-size:0.72rem; margin-top:0.8rem; color:var(--muted)">
+            <span>Charging: <strong id="rep-cost-charge-pct" style="color:var(--blue)">--%</strong></span>
+            <span>Maintenance: <strong id="rep-cost-maint-pct" style="color:var(--purple)">--%</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW 4: Driver Violations Analysis -->
       <div class="card" style="margin-bottom:1.4rem;">
-        <div class="report-tabs">
-          <button class="rtab active" onclick="switchTab(this,'daily')">Daily</button>
-          <button class="rtab" onclick="switchTab(this,'weekly')">Weekly</button>
-          <button class="rtab" onclick="switchTab(this,'monthly')">Monthly</button>
+        <div class="card-title-row">
+          <div class="card-title">⚠️ Driver Violations Analysis (March, April, May)</div>
+          <select id="violations-driver-select" style="background:rgba(0,212,255,.05); border:1px solid var(--border); border-radius:.5rem; padding:.35rem .7rem; color:var(--text); font-size:.78rem; outline:none; cursor:pointer;" onchange="loadDriverViolationsReport(this.value)">
+            <option value="D001">Driver D001 (Aakash)</option>
+            <option value="D002">Driver D002 (Babu)</option>
+            <option value="D003">Driver D003 (Sanjay)</option>
+            <option value="D004">Driver D004 (Deepak)</option>
+            <option value="D005">Driver D005 (Pranav)</option>
+            <option value="D006">Driver D006 (Ganesh)</option>
+            <option value="D007">Driver D007 (Vijay)</option>
+            <option value="D008">Driver D008 (Karthik)</option>
+            <option value="D009">Driver D009 (Manoj)</option>
+            <option value="D010">Driver D010 (Hari)</option>
+          </select>
         </div>
-        <div class="grid-2" style="margin-bottom:0">
-          <div>
-            <div class="report-row"><span>Total Distance</span><span class="rval" id="r-dist">2,418 km</span><span class="rdelta" id="r-dist-d">↑ 8%</span></div>
-            <div class="report-row"><span>Energy Consumed</span><span class="rval" id="r-energy">512 kWh</span><span class="rdelta" id="r-energy-d">↑ 5%</span></div>
-            <div class="report-row"><span>Active Drivers</span><span class="rval" id="r-drv">31</span><span class="rdelta" id="r-drv-d">↑ 3</span></div>
+        <div class="grid-2" style="margin-bottom:0; align-items:center;">
+          <div style="position:relative; height: 230px;">
+            <canvas id="driverViolationsChart"></canvas>
           </div>
-          <div>
-            <div class="report-row"><span>Charging Sessions</span><span class="rval" id="r-sess">24</span><span class="rdelta" id="r-sess-d">↑ 2</span></div>
-            <div class="report-row"><span>Avg Battery Level</span><span class="rval" id="r-batt">64%</span><span class="rdelta neg" id="r-batt-d">↓ 4%</span></div>
-            <div class="report-row"><span>Fleet Efficiency</span><span class="rval" id="r-eff">4.7 km/kWh</span><span class="rdelta" id="r-eff-d">↑ 0.2</span></div>
+          <div style="padding:1rem; display:flex; flex-direction:column; gap:0.6rem;">
+            <h4 style="color:var(--green)">Driver Violations Summary</h4>
+            <div style="font-size:0.82rem; color:var(--muted)" id="rep-violations-summary-list">
+              <!-- Rendered Dynamically -->
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- EXECUTIVE SUMMARY REPORT -->
       <div class="card">
-        <div class="card-title">📊 Energy Consumption Bar Chart</div>
-        <div class="bar-chart" id="report-chart" style="height:110px;"></div>
-        <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:.3rem;">
-          <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+        <div class="card-title">📋 Executive Performance Report & Recommendations</div>
+        <div style="display:flex; flex-direction:column; gap:0.8rem; margin-top:0.5rem; line-height:1.6;" id="rep-insights-box">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ MODEL PERFORMANCE ═══════════════ -->
+    <div class="section" id="sec-model-performance">
+      <div class="topbar">
+        <h2>Model <span>Performance Analysis</span></h2>
+        <button class="action-btn green" onclick="exportSectionToPDF('sec-model-performance','model-report.pdf')">Export PDF</button>
+      </div>
+
+      <!-- KPI CARDS -->
+      <div class="grid-4" style="margin-bottom:1.4rem;">
+        <div class="card stat-card">
+          <div class="stat-icon">🏎️</div>
+          <div class="stat-value blue" id="model-kpi-top-model">--</div>
+          <div class="stat-label">Top Model by Score</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon">📈</div>
+          <div class="stat-value green" id="model-kpi-avg-utilization">--%</div>
+          <div class="stat-label">Avg Utilization Rate</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-value orange" id="model-kpi-avg-efficiency">-- km/kWh</div>
+          <div class="stat-label">Avg Fleet Efficiency</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon">🔧</div>
+          <div class="stat-value red" id="model-kpi-total-maint">₹--</div>
+          <div class="stat-label">Total Maint Cost</div>
+        </div>
+      </div>
+
+      <!-- CHARTS -->
+      <div class="grid-2" style="margin-bottom:1.4rem;">
+        <div class="card">
+          <div class="card-title">📊 Model Comparison (Trips, Distance & Revenue)</div>
+          <div style="position:relative; height: 260px;">
+            <canvas id="modelComparisonChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🕸️ Radar Performance Comparison</div>
+          <div style="position:relative; height: 260px; display:flex; justify-content:center; align-items:center;">
+            <canvas id="modelRadarChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- PERFORMANCE GRID HEATMAP -->
+      <div class="card" style="margin-bottom:1.4rem;">
+        <div class="card-title">🌡️ Model Performance Grid Heatmap</div>
+        <div style="overflow-x:auto;">
+          <table id="model-perf-heatmap-table" style="font-size:0.75rem; text-align:center; border-collapse:collapse; width:100%;">
+            <!-- Loaded dynamically -->
+          </table>
+        </div>
+      </div>
+
+      <!-- MODEL LEADERBOARD TABLE -->
+      <div class="card">
+        <div class="card-title">🏆 Vehicle Models Leaderboard (Ranked Descending)</div>
+        <div class="table-wrap">
+          <table class="sortable-table">
+            <thead>
+              <tr>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('model-leaderboard-tbody', 0, 'string')">Model ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('model-leaderboard-tbody', 1, 'number')">Trips ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('model-leaderboard-tbody', 2, 'number')">Distance (km) ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('model-leaderboard-tbody', 3, 'number')">Revenue (₹) ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('model-leaderboard-tbody', 4, 'number')">Charging Cost ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('model-leaderboard-tbody', 5, 'number')">Maint Cost ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('model-leaderboard-tbody', 6, 'number')">Violations ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('model-leaderboard-tbody', 7, 'number')">Efficiency ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('model-leaderboard-tbody', 8, 'number')">Utilization ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('model-leaderboard-tbody', 9, 'number')">Perf Score ⇅</th>
+              </tr>
+            </thead>
+            <tbody id="model-leaderboard-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ DRIVER PERFORMANCE ═══════════════ -->
+    <div class="section" id="sec-driver-performance">
+      <div class="topbar">
+        <h2>Driver <span>Performance Intelligence</span></h2>
+        <button class="action-btn green" onclick="exportSectionToPDF('sec-driver-performance','driver-report.pdf')">Export PDF</button>
+      </div>
+
+      <!-- BEST/WORST DRIVERS -->
+      <div class="grid-2" style="margin-bottom:1.4rem;">
+        <div class="card" style="border-left: 5px solid var(--green);">
+          <div class="card-title" style="color:var(--green)">🏆 Top Performing Drivers</div>
+          <div id="driver-top-performers-list" style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.5rem;">
+            <!-- Filled dynamically -->
+          </div>
+        </div>
+        <div class="card" style="border-left: 5px solid var(--red);">
+          <div class="card-title" style="color:var(--red)">⚠️ Action Required (Lowest Score Drivers)</div>
+          <div id="driver-bottom-performers-list" style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.5rem;">
+            <!-- Filled dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- CHARTS -->
+      <div class="grid-2" style="margin-bottom:1.4rem;">
+        <div class="card">
+          <div class="card-title">📊 Driver Safety & Performance Score Distribution</div>
+          <div style="position:relative; height: 250px;">
+            <canvas id="driverScoreBarChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">📈 Monthly Driver Earnings Trend</div>
+          <div style="position:relative; height: 250px;">
+            <canvas id="driverTrendLineChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRIVER PERFORMANCE LEADERBOARD -->
+      <div class="card">
+        <div class="card-title">👥 Complete Driver Score Leaderboard</div>
+        <div class="table-wrap">
+          <table class="sortable-table">
+            <thead>
+              <tr>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('driver-leaderboard-tbody', 0, 'string')">Driver ID ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('driver-leaderboard-tbody', 1, 'string')">Name ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('driver-leaderboard-tbody', 2, 'number')">Trips ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('driver-leaderboard-tbody', 3, 'number')">Revenue (₹) ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('driver-leaderboard-tbody', 4, 'number')">Distance (km) ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('driver-leaderboard-tbody', 5, 'number')">Violations ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('driver-leaderboard-tbody', 6, 'number')">Avg Rating ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('driver-leaderboard-tbody', 7, 'number')">Utilization ⇅</th>
+                <th style="cursor:pointer;" onclick="sortFrontendTable('driver-leaderboard-tbody', 8, 'number')">Perf Score ⇅</th>
+              </tr>
+            </thead>
+            <tbody id="driver-leaderboard-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ VIOLATIONS ANALYTICS ═══════════════ -->
+    <div class="section" id="sec-violations-analytics">
+      <div class="topbar">
+        <h2>Safety & <span>Violations Intelligence</span></h2>
+        <button class="action-btn green" onclick="exportSectionToPDF('sec-violations-analytics','violations-report.pdf')">Export PDF</button>
+      </div>
+
+      <!-- KPI CARDS -->
+      <div class="grid-4" style="margin-bottom:1.4rem;">
+        <div class="card stat-card">
+          <div class="stat-icon">⚠️</div>
+          <div class="stat-value red" id="violations-kpi-total">--</div>
+          <div class="stat-label">Total Fleet Violations</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon">🛑</div>
+          <div class="stat-value orange" id="violations-kpi-top-driver">--</div>
+          <div class="stat-label">Most Violation Driver</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon">🚗</div>
+          <div class="stat-value orange" id="violations-kpi-top-vehicle">--</div>
+          <div class="stat-label">Most Violation EV</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon">📈</div>
+          <div class="stat-value green" id="violations-kpi-safety-index">--%</div>
+          <div class="stat-label">Fleet Safety Score Index</div>
+        </div>
+      </div>
+
+      <!-- CHARTS -->
+      <div class="grid-3" style="margin-bottom:1.4rem;">
+        <div class="card" style="grid-column: span 2;">
+          <div class="card-title">📊 Violations Leaderboard by Driver</div>
+          <div style="position:relative; height: 260px;">
+            <canvas id="violationsLeaderboardChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">📈 Monthly Violations Trend</div>
+          <div style="position:relative; height: 260px;">
+            <canvas id="violationsMonthlyTrendChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIOLATIONS TYPE HEATMAP -->
+      <div class="card">
+        <div class="card-title">🌡️ Driver Violation Type Heatmap Table</div>
+        <div style="overflow-x:auto;">
+          <table id="violations-heatmap-table" style="font-size:0.78rem; text-align:center; border-collapse:collapse; width:100%;">
+            <!-- Loaded dynamically -->
+          </table>
         </div>
       </div>
     </div>
@@ -694,7 +1088,7 @@
           <div class="card-title">🍩 Revenue Breakdown</div>
           <div style="display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;">
             <svg width="110" height="110" viewBox="0 0 110 110" style="flex-shrink:0;">
-              <circle cx="55" cy="55" r="40" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="18"/>
+              <circle cx="55" cy="55" r="40" fill="none" stroke="rgba(0,0,0,.05)" stroke-width="18"/>
               <!-- Trips 80% -->
               <circle cx="55" cy="55" r="40" fill="none" stroke="var(--blue)" stroke-width="18"
                 stroke-dasharray="201 50" stroke-dashoffset="251" transform="rotate(-90 55 55)"/>
@@ -887,7 +1281,7 @@
         <div class="table-wrap">
           <table>
             <thead><tr>
-              <th>Vehicle ID</th><th>Driver</th><th>Type</th><th>Due Date</th>
+              <th>Vehicle ID</th><th>Driver</th><th>Type</th><th>Due Date</th><th>Maint Cost</th>
               <th>Breakdown</th><th>Overspeed</th><th>Priority</th><th>Action</th>
             </tr></thead>
             <tbody id="maint-tbody"></tbody>

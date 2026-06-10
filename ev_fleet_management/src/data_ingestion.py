@@ -149,7 +149,7 @@ def seed_database(db: Session):
         speed = float(row["Speed"])
         if speed > 0:
             import math
-            angle = (idx % 360) * (math.PI / 180.0)
+            angle = (idx % 360) * (math.pi / 180.0)
             # Move coordinates
             lat += (speed / 100000.0) * math.cos(angle)
             lng += (speed / 100000.0) * math.sin(angle)

@@ -6,9 +6,9 @@
   function init(){p=[];const n=Math.floor(W*H/20000);
     for(let i=0;i<n;i++)p.push({x:Math.random()*W,y:Math.random()*H,
       r:Math.random()*1.5+.3,dx:(Math.random()-.5)*.22,dy:(Math.random()-.5)*.22,
-      a:Math.random()*.5+.15,c:Math.random()>.5?'0,212,255':'0,255,136'});}
+      a:Math.random()*.4+.1,c:Math.random()>.5?'37,99,235':'22,163,74'});}
   function frame(){ctx.clearRect(0,0,W,H);g+=.18;
-    const s=55,o=g%s;ctx.strokeStyle='rgba(0,212,255,.03)';ctx.lineWidth=1;
+    const s=55,o=g%s;ctx.strokeStyle='rgba(37,99,235,.04)';ctx.lineWidth=1;
     for(let x=-s+o;x<W+s;x+=s){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
     for(let y=-s+o;y<H+s;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
     p.forEach(q=>{q.x+=q.dx;q.y+=q.dy;
@@ -591,8 +591,10 @@ function initRevenue(){
         income: `₹${d.income.toLocaleString()}`,
         charging: `₹${d.charging_cost.toLocaleString()}`,
         net: `₹${d.net_earnings.toLocaleString()}`,
+        netValue: d.net_earnings,
         status: allDrivers.find(drv => drv.id === d.driver_id)?.status.toLowerCase() || 'idle'
       }));
+      revDrivers.sort((a, b) => b.netValue - a.netValue);
       renderRevDrivers(revDrivers);
       renderDailyRev();
     });
@@ -1033,6 +1035,9 @@ function renderMaintTable(){
       if(!tb) return;
       tb.innerHTML = '';
       
+      // Sort vehicles by maintenance cost in descending order
+      vehicles.sort((a, b) => (b.maintenance_cost || 0) - (a.maintenance_cost || 0));
+      
       const prioMap = {critical: 'var(--red)', warning: 'var(--orange)', scheduled: 'var(--blue)'};
       
       vehicles.forEach(v => {
@@ -1068,11 +1073,14 @@ function renderMaintTable(){
         const tr = document.createElement('tr'); tr.style.cursor = 'pointer';
         if(priority === 'critical') tr.style.background = 'rgba(255,77,109,.04)';
         
+        const costVal = v.maintenance_cost !== undefined ? `₹${Math.round(v.maintenance_cost).toLocaleString()}` : '₹0';
+        
         tr.innerHTML = `
           <td class="td-id">${v.id}</td>
           <td>${drvName}</td>
           <td style="color:var(--muted);font-size:.76rem">${mType}</td>
           <td style="color:${priority === 'critical' ? 'var(--red)' : 'var(--muted)'};font-weight:600">${due}</td>
+          <td style="color:var(--orange);font-weight:700">${costVal}</td>
           <td>${breakdownVal ? '<span style="color:var(--red);font-weight:700">🔴 Yes</span>' : '<span style="color:var(--green)">✅ No</span>'}</td>
           <td>${overspeedVal ? '<span style="color:var(--red);font-weight:700">⚠️ Yes</span>' : '<span style="color:var(--green)">✅ No</span>'}</td>
           <td>
@@ -1082,9 +1090,9 @@ function renderMaintTable(){
             <button class="action-btn" onclick="event.stopPropagation();showToast('📋 Work order created for ${v.id}')">Assign</button>
           </td>`;
           
-        tr.onmouseenter = () => tr.querySelectorAll('td').forEach(td => td.style.background = 'rgba(0,212,255,.04)');
+        tr.onmouseenter = () => tr.querySelectorAll('td').forEach(td => td.style.background = 'rgba(37,99,235,.03)');
         tr.onmouseleave = () => tr.querySelectorAll('td').forEach(td => td.style.background = priority === 'critical' ? 'rgba(255,77,109,.04)' : '');
-        tr.onclick = () => showModal(`Maintenance: ${v.id}`, `Driver: ${drvName}\\nType: ${mType}\\nDue: ${due}\\nBreakdown: ${breakdownVal ? 'Yes' : 'No'}\\nOverspeed: ${overspeedVal ? 'Yes' : 'No'}\\nPriority: ${priority.toUpperCase()}`);
+        tr.onclick = () => showModal(`Maintenance: ${v.id}`, `Driver: ${drvName}\\nType: ${mType}\\nDue: ${due}\\nCost: ${costVal}\\nBreakdown: ${breakdownVal ? 'Yes' : 'No'}\\nOverspeed: ${overspeedVal ? 'Yes' : 'No'}\\nPriority: ${priority.toUpperCase()}`);
         tb.appendChild(tr);
       });
     });
@@ -1309,7 +1317,7 @@ function navigate(section){
   if(section === 'stations') initStationsDetail();
   if(section === 'analytics') initAnalyticsSection();
   if(section === 'alerts') renderAlerts('all-alerts');
-  if(section === 'reports') buildBarChart('report-chart', energyVals);
+  if(section === 'reports') initExecutiveReport();
   if(section === 'revenue') initRevenue();
   if(section === 'battery') initBatteryMonitor();
   if(section === 'vehicles') initVehiclePerf();
@@ -1564,3 +1572,365 @@ setInterval(pollLatestTelemetry, 3000);
 
 buildBarChart('energy-chart', energyVals);
 buildTrendLine();
+
+/* ── EXECUTIVE REPORT & VISUALIZATIONS ── */
+let workingGarageChartInstance = null;
+let activeVehiclesChartInstance = null;
+let vehicleIncomeChartInstance = null;
+let chargingRevenueChartInstance = null;
+let costComparisonChartInstance = null;
+let driverViolationsChartInstance = null;
+
+function initExecutiveReport() {
+  fetch("/api/analytics/fleet-report")
+    .then(res => {
+      if (!res.ok) throw new Error("Failed to load fleet report data");
+      return res.json();
+    })
+    .then(data => {
+      // 1. Average Metrics Dashboard
+      document.getElementById('rep-avg-battery').textContent = `${data.averages.battery}%`;
+      document.getElementById('rep-avg-range').textContent = `Range: ${data.averages.range} km`;
+      document.getElementById('rep-avg-charge-cost').textContent = `₹${Math.round(data.averages.charging_cost)}`;
+      document.getElementById('rep-avg-maint-cost').textContent = `Maint: ₹${Math.round(data.averages.maintenance_cost)}`;
+      document.getElementById('rep-avg-distance').textContent = `${data.averages.distance} km`;
+      document.getElementById('rep-avg-efficiency').textContent = `Efficiency: ${data.averages.efficiency} km/kWh`;
+
+      // 2. Working vs Garage
+      const wg = data.working_vs_garage;
+      document.getElementById('rep-working-val').textContent = `${wg.working} (${wg.working_pct}%)`;
+      document.getElementById('rep-garage-val').textContent = `${wg.garage} (${wg.garage_pct}%)`;
+
+      if (workingGarageChartInstance) workingGarageChartInstance.destroy();
+      const ctxWG = document.getElementById('workingGarageChart').getContext('2d');
+      workingGarageChartInstance = new Chart(ctxWG, {
+        type: 'pie',
+        data: {
+          labels: [`Working (${wg.working_pct}%)`, `Garage (${wg.garage_pct}%)`],
+          datasets: [{
+            data: [wg.working, wg.garage],
+            backgroundColor: ['#16a34a', '#dc2626'],
+            borderWidth: 1,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#111827' }
+            }
+          }
+        }
+      });
+
+      // 3. Active Vehicles
+      const av = data.active_vehicles;
+      document.getElementById('rep-active-count').textContent = av.count;
+      document.getElementById('rep-active-pct').textContent = `${av.pct}%`;
+
+      if (activeVehiclesChartInstance) activeVehiclesChartInstance.destroy();
+      const ctxAV = document.getElementById('activeVehiclesChart').getContext('2d');
+      activeVehiclesChartInstance = new Chart(ctxAV, {
+        type: 'doughnut',
+        data: {
+          labels: [`Active (${av.pct}%)`, `Inactive (${(100 - av.pct).toFixed(1)}%)`],
+          datasets: [{
+            data: [av.count, data.working_vs_garage.working + data.working_vs_garage.garage - av.count],
+            backgroundColor: ['#2563eb', 'rgba(0,0,0,0.05)'],
+            borderWidth: 1,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#111827' }
+            }
+          }
+        }
+      });
+
+      // 4. Vehicle Income Generated Line Chart
+      const inc = data.vehicle_income;
+      document.getElementById('rep-highest-revenue-vehicle').textContent = `${inc.highest_id} (₹${inc.highest_val.toLocaleString()})`;
+
+      if (vehicleIncomeChartInstance) vehicleIncomeChartInstance.destroy();
+      const colors = ['#2563eb', '#16a34a', '#ea580c', '#dc2626', '#7c3aed', '#0d9488', '#0284c7', '#4f46e5', '#db2777', '#ca8a04'];
+      const datasets = inc.vehicles.map((v, idx) => ({
+        label: v.id,
+        data: [v.March, v.April, v.May],
+        borderColor: colors[idx % colors.length],
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        tension: 0.3,
+        pointRadius: 3
+      }));
+
+      const ctxVI = document.getElementById('vehicleIncomeChart').getContext('2d');
+      vehicleIncomeChartInstance = new Chart(ctxVI, {
+        type: 'line',
+        data: {
+          labels: ['March', 'April', 'May'],
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { color: '#111827', boxWidth: 8, font: { size: 8 } }
+            }
+          },
+          scales: {
+            x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b7280' } },
+            y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b7280' } }
+          }
+        }
+      });
+
+      // 5. Charging Revenue Bar Chart (Sorted in Descending Order of revenue)
+      const cr = data.charging_revenue;
+      document.getElementById('rep-total-charging-revenue').textContent = `₹${cr.total.toLocaleString()}`;
+
+      const sortedCR = [
+        { label: 'March', val: cr.March },
+        { label: 'April', val: cr.April },
+        { label: 'May', val: cr.May }
+      ].sort((a, b) => b.val - a.val);
+
+      if (chargingRevenueChartInstance) chargingRevenueChartInstance.destroy();
+      const ctxCR = document.getElementById('chargingRevenueChart').getContext('2d');
+      chargingRevenueChartInstance = new Chart(ctxCR, {
+        type: 'bar',
+        data: {
+          labels: sortedCR.map(x => x.label),
+          datasets: [{
+            label: 'Charging Revenue',
+            data: sortedCR.map(x => x.val),
+            backgroundColor: ['rgba(234,88,12,1)', 'rgba(234,88,12,0.85)', 'rgba(234,88,12,0.7)'],
+            borderColor: '#ea580c',
+            borderWidth: 1,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#6b7280' } },
+            y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b7280' } }
+          }
+        }
+      });
+
+      // 6. Maintenance Cost Correlation Heatmap table
+      const mc = data.maintenance_correlation;
+      document.getElementById('rep-strongest-pos').textContent = `${mc.strongest_positive.col} (${mc.strongest_positive.val})`;
+      document.getElementById('rep-strongest-neg').textContent = `${mc.strongest_negative.col} (${mc.strongest_negative.val})`;
+      buildCorrelationHeatmapTable(mc.matrix);
+
+      // 7. Operating Costs Contribution
+      const cc = data.cost_comparison;
+      document.getElementById('rep-cost-charge-pct').textContent = `${cc.charging_pct}%`;
+      document.getElementById('rep-cost-maint-pct').textContent = `${cc.maintenance_pct}%`;
+
+      if (costComparisonChartInstance) costComparisonChartInstance.destroy();
+      const ctxCC = document.getElementById('costComparisonChart').getContext('2d');
+      costComparisonChartInstance = new Chart(ctxCC, {
+        type: 'bar',
+        data: {
+          labels: ['Charging Cost', 'Maintenance Cost'],
+          datasets: [{
+            data: [cc.charging_cost, cc.maintenance_cost],
+            backgroundColor: ['#2563eb', '#7c3aed'],
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#6b7280' } },
+            y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b7280' } }
+          }
+        }
+      });
+
+      // 8. Driver Violations (Initialize with current selection)
+      const currentDriver = document.getElementById('violations-driver-select').value;
+      loadDriverViolationsReport(currentDriver);
+
+      // 9. Insights list
+      const insightsBox = document.getElementById('rep-insights-box');
+      if (insightsBox) {
+        insightsBox.innerHTML = '';
+        data.insights.forEach(ins => {
+          const row = document.createElement('div');
+          row.style.cssText = "display:flex; align-items:flex-start; gap:0.5rem; font-size:0.82rem; padding:0.4rem; border-bottom:1px solid rgba(0,0,0,0.05);";
+          row.innerHTML = `<span style="color:var(--green)">📌</span> <span>${ins}</span>`;
+          insightsBox.appendChild(row);
+        });
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      showToast("⚠️ Error generating executive report", "red");
+    });
+}
+
+function buildCorrelationHeatmapTable(matrix) {
+  const table = document.getElementById("maint-corr-heatmap-table");
+  if (!table) return;
+  table.innerHTML = '';
+  
+  const labels = Object.keys(matrix);
+  if (labels.length === 0) return;
+  
+  const thead = document.createElement("thead");
+  const trHead = document.createElement("tr");
+  trHead.appendChild(document.createElement("th"));
+  labels.forEach(l => {
+    const th = document.createElement("th");
+    th.style.padding = "4px";
+    th.style.fontSize = "0.58rem";
+    th.textContent = l.replace(" Cost", "").replace(" Percentage", "%").replace(" Frequency", "").replace(" Travelled", "").replace(" Count", "").replace(" Age (Odo)", " Age");
+    trHead.appendChild(th);
+  });
+  thead.appendChild(trHead);
+  table.appendChild(thead);
+  
+  const tbody = document.createElement("tbody");
+  labels.forEach(rowLabel => {
+    const tr = document.createElement("tr");
+    const tdRowLabel = document.createElement("td");
+    tdRowLabel.style.padding = "4px";
+    tdRowLabel.style.fontWeight = "bold";
+    tdRowLabel.style.textAlign = "left";
+    tdRowLabel.style.color = "var(--muted)";
+    tdRowLabel.textContent = rowLabel.replace(" Cost", "").replace(" Percentage", "%").replace(" Frequency", "").replace(" Travelled", "").replace(" Count", "").replace(" Age (Odo)", " Age");
+    tr.appendChild(tdRowLabel);
+    
+    labels.forEach(colLabel => {
+      const td = document.createElement("td");
+      td.style.padding = "4px";
+      td.style.border = "1px solid rgba(0, 0, 0, 0.08)";
+      
+      const val = parseFloat(matrix[rowLabel][colLabel]);
+      td.textContent = val.toFixed(2);
+      
+      if (rowLabel === colLabel) {
+        td.style.background = "rgba(37, 99, 235, 0.18)";
+        td.style.color = "var(--blue)";
+        td.style.fontWeight = "bold";
+      } else if (val > 0) {
+        td.style.background = `rgba(22, 163, 74, ${val * 0.25})`;
+        td.style.color = "var(--green)";
+      } else if (val < 0) {
+        td.style.background = `rgba(220, 38, 38, ${Math.abs(val) * 0.25})`;
+        td.style.color = "var(--red)";
+      } else {
+        td.style.color = "var(--muted)";
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+}
+
+function loadDriverViolationsReport(driverId) {
+  fetch(`/api/analytics/driver-violations/${driverId}`)
+    .then(res => res.json())
+    .then(data => {
+      // Sort violations categories by total count descending
+      const vioList = [
+        { label: 'Overspeeding', count: data.summary.total_overspeed, color: 'var(--red)' },
+        { label: 'Harsh Braking', count: data.summary.total_braking, color: 'var(--orange)' },
+        { label: 'Harsh Acceleration', count: data.summary.total_accel, color: 'var(--blue)' }
+      ].sort((a, b) => b.count - a.count);
+
+      const summaryList = document.getElementById('rep-violations-summary-list');
+      if (summaryList) {
+        summaryList.innerHTML = '';
+        vioList.forEach(v => {
+          const row = document.createElement('div');
+          row.className = 'settings-row';
+          row.style.cssText = 'display:flex; justify-content:space-between; padding: 0.55rem 0; border-bottom: 1px solid rgba(0,0,0,0.07);';
+          row.innerHTML = `
+            <span>Total ${v.label}:</span>
+            <strong style="color:${v.color}">${v.count}</strong>
+          `;
+          summaryList.appendChild(row);
+        });
+        // Add grand total at the bottom
+        const totalRow = document.createElement('div');
+        totalRow.className = 'settings-row';
+        totalRow.style.cssText = 'display:flex; justify-content:space-between; border-bottom:none; margin-top:0.4rem; padding-top:0.4rem; border-top:1px solid rgba(0,0,0,.1);';
+        totalRow.innerHTML = `
+          <span>Total Combined Violations:</span>
+          <strong style="color:var(--text); font-size:1rem">${data.summary.grand_total}</strong>
+        `;
+        summaryList.appendChild(totalRow);
+      }
+      
+      const v = data.violations;
+      
+      // Sort months by total violations descending
+      const sortedMonths = ['March', 'April', 'May'].sort((a, b) => {
+        const totalA = v[a].overspeed + v[a].harsh_braking + v[a].harsh_accel;
+        const totalB = v[b].overspeed + v[b].harsh_braking + v[b].harsh_accel;
+        return totalB - totalA;
+      });
+
+      if (driverViolationsChartInstance) driverViolationsChartInstance.destroy();
+      
+      const ctx = document.getElementById('driverViolationsChart').getContext('2d');
+      driverViolationsChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: sortedMonths,
+          datasets: [
+            {
+              label: 'Overspeeding',
+              data: sortedMonths.map(m => v[m].overspeed),
+              backgroundColor: '#dc2626'
+            },
+            {
+              label: 'Harsh Braking',
+              data: sortedMonths.map(m => v[m].harsh_braking),
+              backgroundColor: '#ea580c'
+            },
+            {
+              label: 'Harsh Accel',
+              data: sortedMonths.map(m => v[m].harsh_accel),
+              backgroundColor: '#2563eb'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#6b7280' } },
+            y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b7280' } }
+          },
+          plugins: {
+            legend: {
+              labels: { color: '#111827', boxWidth: 10, font: { size: 9 } }
+            }
+          }
+        }
+      });
+    });
+}

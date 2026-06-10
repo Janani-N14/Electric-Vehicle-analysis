@@ -60,7 +60,7 @@ templates = Jinja2Templates(directory=templates_dir)
 # HTML Views
 @app.get("/", response_class=HTMLResponse)
 def index_page(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @app.get("/index.html", response_class=HTMLResponse)
 def index_redirect(request: Request):
@@ -72,14 +72,14 @@ def admin_dashboard_page(request: Request):
     token = request.cookies.get("access_token")
     if not token:
         return RedirectResponse(url="/#portal-card")
-    return templates.TemplateResponse("admin-dashboard.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="admin-dashboard.html")
 
 @app.get("/driver-dashboard.html", response_class=HTMLResponse)
 def driver_dashboard_page(request: Request):
     token = request.cookies.get("access_token")
     if not token:
         return RedirectResponse(url="/#portal-card")
-    return templates.TemplateResponse("driver-dashboard.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="driver-dashboard.html")
 
 if __name__ == "__main__":
     logger.info(f"Starting server at http://{HOST}:{PORT}")

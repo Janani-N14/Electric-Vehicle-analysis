@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict, Optional
 from ev_fleet_management.utils.db import get_db
 from ev_fleet_management.model.models import AlertModel, AlertOut
 from ev_fleet_management.logger import get_logger

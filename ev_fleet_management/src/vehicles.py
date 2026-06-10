@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 from ev_fleet_management.utils.db import get_db
-from ev_fleet_management.model.models import EVModel, EVCreate, EVOut
+from ev_fleet_management.model.models import EVModel, EVCreate, EVOut, TelemetryModel
 from ev_fleet_management.logger import get_logger
 
 logger = get_logger(__name__)
@@ -10,7 +11,11 @@ router = APIRouter(prefix="/api/vehicles", tags=["vehicles"])
 
 @router.get("", response_model=List[EVOut])
 def get_all_vehicles(db: Session = Depends(get_db)):
-    return db.query(EVModel).all()
+    vehicles = db.query(EVModel).all()
+    for v in vehicles:
+        maint_cost = db.query(func.sum(TelemetryModel.maintenance_cost)).filter(TelemetryModel.vehicle_id == v.id).scalar() or 0.0
+        v.maintenance_cost = float(maint_cost)
+    return vehicles
 
 @router.post("", response_model=EVOut, status_code=status.HTTP_201_CREATED)
 def register_vehicle(ev_data: EVCreate, db: Session = Depends(get_db)):
@@ -47,6 +52,8 @@ def get_vehicle(vehicle_id: str, db: Session = Depends(get_db)):
     ev = db.query(EVModel).filter(EVModel.id == vehicle_id).first()
     if not ev:
         raise HTTPException(status_code=404, detail="Vehicle not found")
+    maint_cost = db.query(func.sum(TelemetryModel.maintenance_cost)).filter(TelemetryModel.vehicle_id == vehicle_id).scalar() or 0.0
+    ev.maintenance_cost = float(maint_cost)
     return ev
 
 @router.delete("/{vehicle_id}")
